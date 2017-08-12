@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>Initializing the Raspberry Pi 3 (headless) - Laurens' geeky adventures</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3.html">
+
+        <meta name="author" content="Laurens" />
+        <meta name="keywords" content="Raspberry Pi 3,Settings" />
+        <meta name="description" content="Recently I received my first Raspberry Pi 3 in an attempt to satisfy the curiousity. I occasionally play with projects that require jobs to be run at regular interval and having a low powered Raspberry Pi 3 to do this is ideal. Since I will likely mess up my RPi3 ..." />
+
+        <meta property="og:site_name" content="Laurens' geeky adventures" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="Initializing the Raspberry Pi 3 (headless)"/>
+        <meta property="og:url" content="https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3.html"/>
+        <meta property="og:description" content="Recently I received my first Raspberry Pi 3 in an attempt to satisfy the curiousity. I occasionally play with projects that require jobs to be run at regular interval and having a low powered Raspberry Pi 3 to do this is ideal. Since I will likely mess up my RPi3 ..."/>
+        <meta property="article:published_time" content="2016-05-03" />
+            <meta property="article:section" content="2016" />
+            <meta property="article:tag" content="Raspberry Pi 3" />
+            <meta property="article:tag" content="Settings" />
+            <meta property="article:author" content="Laurens" />
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="https://blog.laurens.xyz/theme/css/bootstrap.yeti.min.css" type="text/css"/>
+    <link href="https://blog.laurens.xyz/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="https://blog.laurens.xyz/theme/css/pygments/zenburn.css" rel="stylesheet">
+    <link href="https://blog.laurens.xyz/theme/tipuesearch/tipuesearch.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://blog.laurens.xyz/theme/css/style.css" type="text/css"/>
+
+
+
+
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://blog.laurens.xyz/" class="navbar-brand">
+Laurens' geeky adventures            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li ><a href="https://blog.laurens.xyz/tags.html">Tags</a></li>
+              <li><span>
+                <form class="navbar-search" action="/search.html">
+                  <input type="text" class="search-query" placeholder="Search" name="q" id="tipue_search_input" required>
+                </form></span>
+              </li>
+              <li><a href="https://blog.laurens.xyz/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3.html"
+                       rel="bookmark"
+                       title="Permalink to Initializing the Raspberry Pi 3 (headless)">
+                        Initializing the Raspberry Pi 3 (headless)
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2016-05-03T20:15:00+02:00"> 03-05-2016</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="https://blog.laurens.xyz/tags/raspberry-pi-3.html">Raspberry Pi 3</a>
+        /
+	<a href="https://blog.laurens.xyz/tags/settings.html">Settings</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>Recently I received my first Raspberry Pi 3 in an attempt to satisfy the curiousity.
+I occasionally play with projects that require jobs to be run at regular interval and
+having a low powered Raspberry Pi 3 to do this is ideal. Since I will likely mess up
+my RPi3 numerous times I would like to quickly document how I set up my RPi3 so I can
+reset my pi if need be. In this guide I will briefly explain the essential steps that are needed to get a usable RPi. In this guide I will do that completely headless, that is without any keyboard, screen or other peripherals connected to the Raspberry Pi.</p>
+<p>First a interesting little fact that I would like to share. <a href="http://tweakers.net/reviews/4443/5/raspberry-pi-3-net-iets-sneller-dan-de-oude-opgenomen-vermogen-en-warmte.html">A recent review</a> shows that the RPi3 consumes 2.21 Watt in idle state and
+and maximum peaks of 3.62 Watt under stress. If we assume a generous 2.5 Watt average power consumption and 0.23€ Kwh energy price, the RPi3 costs only
+<code>2.5 / 1000 * 24 * 365 * 0.23 = 5.037€</code> to operate full-time per year. It thus costs virtually
+nothing to run my own little RPi3 server and it is an excellent opportunity for me to
+experience and learn the ways of Linux.</p>
+<h1>Installing the OS</h1>
+<p>The official supported operating system for the RPi is <a href="https://www.raspberrypi.org/downloads/raspbian">Raspbian</a>, and comes pre-installed with plenty of software for education, programming and general use. It has Python, Scratch, Sonic Pi, Java, Mathematica and more. Since I will be running the RPi headless, I will be obtaining
+the Raspbian Jessie Lite image. This lite version of Raspbian does not include the
+components for displaying a desktop environment. Everything will be running from a
+simple terminal, which hopefully frees some much needed resources.</p>
+<p>For Windows, the image can simply be installed to a MicroSD card (min. 2GB) using <code>Win32DiskImager</code> (<a href="http://sourceforge.net/projects/win32diskimager/">Sourceforge page</a>). These directions are pretty straightforward, altough be aware that this wipes the complete SD card, so back up what you still need on the card.</p>
+<h1>Setting up to the Raspberry Pi 3 for the first time</h1>
+<p>After writing the image the SD card, it needs to be inserted into the RPi. Power the RPi with
+standard microUSB charger. It is wise to have a charger that provides a stable voltage and plenty of amperes. The recommended voltage is 5V (or within 10% margin) and at least 2A. Having too little power can result in an unstable pi. Now that the pi is running, we would like to contol it. To control it we have to use a SSH connection. SSH, or secure shell, is the mainstay of remote access and administration in the Linux world. Windows lacks a native SSH client for connecting to Linux machines. So if you are a Windows user like me, please grab a SSH client first, <em>e.g.</em> <a href="http://www.putty.org/">Putty</a>.</p>
+<h2>Connecting to the RPi3</h2>
+<p>The RPi3 has onboard WiFi, but unfortunately has no ears. This makes it hard for us to tell it the correct WiFi settings. Fortunately, most people will have some LAN cable to connect the RPi for the first time and edit the relevant WiFi settings. Simply connect the RPi to a router or computer and try to discover the local IP adress of the RPi. Enter this IP adress in your SSH client, and assume the default port for SSH (port 22). The SSH terminal will ask for a user and password. The default password is <code>pi</code> and the password is <code>raspberry</code>.</p>
+<p>If you have no LAN cable available or you are just lazy like me, there is a workaround which I will explain in the next section that allows us to set up WiFi without the need of a LAN cable.</p>
+<h2>Setting up WiFi</h2>
+<p>We now must set up the RPi with the correct WiFi configuration. For this we need to edit the file <code>\etc\wpa_supplicant\wpa_supplicant.conf</code>. If already connected to the Pi through a LAN cable, we can simply edit that file over SSH using the command</p>
+<div class="highlight"><pre><span></span>sudo nano \etc\wpa_supplicant\wpa_supplicant.conf
+</pre></div>
+
+
+<p>If not connected yet, it is possible to edit the SD card using another Linux-operated computer or by mounting the <em>Ext</em> filesystem on the SD card on Windows with <a href="http://www.paragon-software.com/home/extfs-windows/">Pargon ExtFS for Windows</a>. With the latter option, please use a proper file editor that supports LF line endings.</p>
+<p>For each wireless network that we would like to use, add the following lines:</p>
+<div class="highlight"><pre><span></span>network{
+  ssid=&quot;Wifi name here&quot;
+  psk=&quot;Wifi password here&quot;
+}
+</pre></div>
+
+
+<p>Now simply save the file (CRTL+X if you used the <code>sudo nano</code> command) and restart the RPi. If set up correctly, the Raspberry Pi now connects to your wireless network! Just find the new local IP in the administrative console of your router and you can connect using a SSH client.</p>
+<h1>Expanding the filesystem</h1>
+<p>The usual distribution images are 2 GB. When you copy the image to a larger SD card you have a portion of that card unused. This will quickly lead to issues where you run out of space. To fix this, the default raspbian image comes with a config tool. Start this config tool with the command</p>
+<div class="highlight"><pre><span></span>sudo raspi-config
+</pre></div>
+
+
+<p>There will simply be a option <code>Expand Filesystem</code>. Select this and reboot the Pi. Now pretty much most steps are completed that are needed to get started with the pi. Enjoy!</p>
+            </div>
+            <!-- /.entry-content -->
+    <hr/>
+    <section class="comments" id="comments">
+        <h2>Comments</h2>
+
+        <div id="disqus_thread"></div>
+        <script type="text/javascript">
+            /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+            var disqus_shortname = 'iilaurens'; // required: replace example with your forum shortname
+
+                    var disqus_identifier = 'Initializing-the-raspberry-pi-3';
+                var disqus_url = 'https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3.html';
+
+            var disqus_config = function () {
+                this.language = "en";
+            };
+
+            /* * * DON'T EDIT BELOW THIS LINE * * */
+            (function () {
+                var dsq = document.createElement('script');
+                dsq.type = 'text/javascript';
+                dsq.async = true;
+                dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+        </script>
+        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+            Disqus.</a></noscript>
+        <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    </section>
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">&copy; 2017 Laurens
+            &middot; Powered by <a href="https://github.com/getpelican/pelican-themes/tree/master/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="https://blog.laurens.xyz/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="https://blog.laurens.xyz/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="https://blog.laurens.xyz/theme/js/respond.min.js"></script>
+
+    <!-- Disqus -->
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = 'iilaurens'; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function () {
+            var s = document.createElement('script');
+            s.async = true;
+            s.type = 'text/javascript';
+            s.src = '//' + disqus_shortname + '.disqus.com/count.js';
+            (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+        }());
+    </script>
+    <!-- End Disqus Code -->
+    <!-- Google Analytics -->
+    <script type="text/javascript">
+
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-77190701-1']);
+        _gaq.push(['_trackPageview']);
+
+        (function () {
+            var ga = document.createElement('script');
+            ga.type = 'text/javascript';
+            ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+    <!-- End Google Analytics Code -->
+
+</body>
+</html>

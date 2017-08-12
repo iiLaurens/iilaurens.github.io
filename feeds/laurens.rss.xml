@@ -1,0 +1,1300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel><title>Laurens' geeky adventures</title><link>https://blog.laurens.xyz/</link><description></description><lastBuildDate>Sat, 07 Oct 2017 19:46:00 +0200</lastBuildDate><item><title>Installing Ubuntu on Intel Atom Devices</title><link>https://blog.laurens.xyz/post/Ubuntu-on-Intel-Atom-Device.html</link><description>&lt;p&gt;A month or two ago I bought myself a new device to replace my faithfull Raspberry Pi 3. I made the change for several reasons. Among those reasons are the lack of RAM, the lack of supported video types, lack of USB 3 and the fact that the (slow) LAN port shared a controller with all USB ports. Don't get me wrong, the RPi3 is a great device, it just couldn't be the media server that I once hoped it to be. Hence, I got interested in cheap and low-powered Intel Atom devices. The &lt;a href="http://www.bee-link.com/Beelink-MiniPC-TV-BOX-66-1.html"&gt;Beelink AP42&lt;/a&gt; caught my eye in particular due to it's fanless and therefore silent design. It would be the ultimate low-power media center.&lt;/p&gt;
+&lt;p&gt;After receiving this unit, I quickly realized that installing Linux would be quite the task. Pretty much all installation images of Linux distributions would not boot for reason that are still unclear to me. This was quite the bummer because manufacturers of these Intel Atom devices advertise Linux support. None of them actually provides the support themselves. After sinking plenty of hours in getting this little baby to work, I finally have a working Ubuntu system. In this blog post I will share the secret to the world so that everyone can enjoy these amazing devices to the fullest. This guide certainly works for installing Ubuntu to the Beelink AP42, but it will most likely work for similar Atom-based devices too (Beelink AP34, VOYO V1 Vmac).&lt;/p&gt;
+&lt;h1&gt;Preparing the installation image&lt;/h1&gt;
+&lt;p&gt;One should start with downloading the official Ubuntu image. Another Ubuntu flavour should work &lt;em&gt;in theory&lt;/em&gt;, however I found that in other distro's that the HDMI audio passtrough would not work. If audio over HDMI is not a concern to you and you can use the audiojack instead, then go ahead. In any other case, I recommend starting with the full Ubuntu distro and then replace the default unity desktop with the desktop of another distro (Xubuntu, Lubuntu, ...) using the package manager.&lt;/p&gt;
+&lt;p&gt;Once you have chosen a version(Ubuntu 17.04 in my case). The default boot manager in these ISO's fail to load on Intel Atom devices and one should resort to either rEFInd or syslinux as a boot manager. In addition a newer kernel version is required for proper HDMI audio support. This sounded like a daunting task to me, but &lt;a href="http://linuxiumcomau.blogspot.com/"&gt;Linuxium&lt;/a&gt; has made an amazing script named &lt;em&gt;isorespin.sh&lt;/em&gt; that does most of the work. The complete package (but without the clean ISO), including some audio, WiFi and Bluetooth drivers, can be downloaded from &lt;a href="https://ilaurens.stackstorage.com/s/E8cwo4BtIYnnJk2"&gt;here&lt;/a&gt;. Simply put all the files in the folder and run from a root shell (&lt;code&gt;sudo -i&lt;/code&gt;) the following:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;# Make scripts executable
+chmod u+x isorespin.sh linuxium-install-UCM-files.sh linuxium-install-broadcom-drivers.sh wrapper-linuxium-install-UCM-files.sh wrapper-linuxium-install-broadcom-drivers.sh
+
+# Now for the actual respinning
+./isorespin.sh -i ubuntu-17.04-desktop-amd64.iso -l rtl8723bs_4.12.0_amd64.deb -f linuxium-install-UCM-files.sh -f wrapper-linuxium-install-UCM-files.sh -f linuxium-install-broadcom-drivers.sh -f wrapper-linuxium-install-broadcom-drivers.sh -c wrapper-linuxium-install-UCM-files.sh -c wrapper-linuxium-install-broadcom-drivers.sh -s 256MB -k v4.11&amp;#39;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Note however that the respinning is done on an Ubuntu distribution itself, as I found that spinning the ISO on an Lubuntu distro results in unbootable ISO's as well. I spare you from all the effort that goes into this spinning and instead offer you &lt;a href="https://mega.nz/#!bM8hESrY"&gt;this image&lt;/a&gt;. Make sure to &lt;em&gt;dd&lt;/em&gt; this to an USB stick (again I recommend to use Ubuntu or a Ubuntu VM). The command should be &lt;code&gt;dd if=linuxium-persistence-v4.11-Ubuntu-17.04-desktop-amd64.iso of=\dev\sdX bs=4M&lt;/code&gt;. Make sure to replace &lt;code&gt;sdX&lt;/code&gt; with the correct reference to your USB device. After a succesfull copy simply boot the Live USB on your Intel Atom device (Press &lt;em&gt;F7&lt;/em&gt; during for a boot menu) and start the installation.&lt;/p&gt;
+&lt;h1&gt;Making your fresh Ubuntu installation bootable&lt;/h1&gt;
+&lt;p&gt;If you try to boot your freshly installed OS from your internal storage, you will be sorely dissapointed. The OS is installed with the same erroneous bootloader that was present on the official ISO file. Yikes! We now need to change the boot configuration manually. Simply launch the Live USB again. We will simply recycle the rEFInd boot manager from the USB device (with some minor adjustments). The following commands will effectively copy the boot manager. Just make sure to replace &lt;code&gt;/dev/sda1&lt;/code&gt; with the proper reference to the first partition of your USB device. Similarly, replace &lt;code&gt;/dev/mmcblk1p1&lt;/code&gt; with the name for your internal storage's first partition.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;# Create mountpoints for the EFI boot partitions of the internal storage and USB
+mkdir /mnt/bootusb
+mkdir /mnt/bootdisk
+mount /dev/sda1 /mnt/bootusb
+mount /dev/mmcblk1p1 /mnt/bootdisk
+
+# Remove the existing files from the internal hard drive&amp;#39;s EFI partition
+rm -r /mnt/bootdisk
+# Now copy the rEFInd bootloader from the USB to our internal storage
+cp -r /mnt/bootusb/EFI /mnt/bootdisk
+
+# Point the EFI boot system where to look for the new bootloader and make it the first boot option
+efibootmgr -c -l \\EFI\\boot\\bootx64.efi -L rEFInd -d /dev/mmcblk1 -b 1234
+efibootmgr -o 1234
+
+# Now repair some rEFInd settings so that our system immediately boots the first OS it finds (Ubuntu). No graphics for more speed.
+sed -i &amp;#39;s/^scanfor manual$/scanfor internal/&amp;#39; /mnt/bootdisk/EFI/boot/refind.conf
+sed -i &amp;#39;s/^timeout 20$/timeout -1/&amp;#39; /mnt/bootdisk/EFI/boot/refind.conf
+sed -i &amp;#39;s/^#textonly$/textonly/&amp;#39; /mnt/bootdisk/EFI/boot/refind.conf
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;After running these commands you can remove the USB stick and restart the device. That is all there is to it. Now you can experience the joy of Linux on your Intel Atom device!&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Sat, 07 Oct 2017 19:46:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2017-10-07:post/Ubuntu-on-Intel-Atom-Device.html</guid><category>Ubuntu</category><category>Beelink</category><category>Intel Atom</category><category>Install</category></item><item><title>A secure torrent solution for Raspbian, Debian or Ubuntu</title><link>https://blog.laurens.xyz/post/Secure-torrenting.html</link><description>&lt;p&gt;&lt;strong&gt;Edit June 2017:&lt;/strong&gt;
+&lt;em&gt;I once wrote this blog to turn my raspberry pi in a do-it-all home server. One of the tasks I needed it to do was to use secure and undetectable torrent connections for 'reasons'. This blogpost shows actually how to set this up for a raspberry pi. It allows a VPN to be run in the background without pulling all the data traffic on the little machine. It only forwarded torrent traffic (or any traffic by an arbitrary but prespecified user). These days however I have moved to a more powerfull machine which is able to run an Ubuntu desktop. Unfortunately these guidelines did not work immediately for an Ubuntu setup. Having investigated the issue I have now added additional descriptions for this setup to work on an Ubuntu (version 16 or higher) machine. These descriptions can be found at the bottom of this page.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;I will be discussing some of the applications I have been using on my raspberry pi to turn it into a low power torrent that can always stay powered on. It serves as a torrent box with &lt;em&gt;Deluge&lt;/em&gt;, which I can control remotely from one of my desktop computers using deluge's &lt;em&gt;thin client&lt;/em&gt;. I will also show how to connect deluge through a secure VPN tunnel such that all torrenting traffic is safely encrypted whilst the rest of the Raspberry Pi's traffic can travel through regular channels.&lt;/p&gt;
+&lt;h1&gt;Confuguring OpenVPN&lt;/h1&gt;
+&lt;p&gt;Start with installing openVPN&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo apt-get install openvpn
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;To get the client up and running, I expect that you already are subscribed to some VPN service provider. Most providers have configuratoin files available that are ready to be used with OpenVPN. Obtain the download URL of these settings from your provider and put it in &lt;code&gt;/etc/openvpn&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;cd /etc/openvpn
+sudo wget &amp;lt;url here&amp;gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;My service provider happened to have multiple configuration available for several VPN servers. These files are all contained in a zip, hence I unzip them. Notice that I also rename the files to a &lt;code&gt;.conf&lt;/code&gt; extension as mine originally came in a &lt;code&gt;.ovpn&lt;/code&gt; format. The rename command is thus optional.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo unzip &amp;lt;filename&amp;gt;
+sudo rename &amp;quot;s/.ovpn/.conf/&amp;quot; *.ovpn
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Acces to VPN servers is often password protect. The configuration files generally do not include your personal password and username so we have to add them ourselves. Drop your username and password into a file named &lt;code&gt;auth.txt&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo cat &amp;lt;&amp;lt; EOF | sudo tee auth.txt
+username
+password
+EOF
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now we have edit our VPN's configuration files to include a reference to our authorization file.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo sed -i &amp;#39;s|auth-user-pass|auth-user-pass \/etc\/openvpn\/auth.txt|&amp;#39; *.conf
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The above command replaces every occurance of &lt;code&gt;auth-user-pass&lt;/code&gt; with &lt;code&gt;auth-user-pass auth.txt&lt;/code&gt;. If your configuration file did not include a &lt;code&gt;auth-user-pass&lt;/code&gt; line then you have to append it yourself. Finally see if is working correctly using a&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;curl https://jsonip.com
+sudo openvpn --daemon --config /etc/openvpn/&amp;lt;file&amp;gt;.conf
+curl https://jsonip.com
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Note that the curl commands should return ip addresses. It should show two different IP addresses before and after starting OpenVPN. If this works, we are all set!&lt;/p&gt;
+&lt;h1&gt;Installing Deluge&lt;/h1&gt;
+&lt;p&gt;To install deluge, start with installing the &lt;code&gt;deluged&lt;/code&gt; package, which is the daemon package of deluge (so without the front-end as we are running it from a terminal).&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo apt-get install deluged
+sudo apt-get install deluge-console
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;First of all, we want deluge to operate from a seperate user so that later we can redirect it's traffic by user ID. We start by creating a new user named &lt;code&gt;deluge&lt;/code&gt;:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo adduser deluge
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Next, we have to start deluge once under the deluge username to create all the configuration files. The -u after the sudo command tells our Pi to run this operations as the &lt;code&gt;deluge&lt;/code&gt; user. (for an Ubuntu setup, one might have to add the -H flag before the -u flag to prevent the sudo command from defaulting to the root user's home folder)&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo -u deluge deluged
+sudo pkill deluged
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now we can create a custom username and password so we control the deluge app remotely.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo nano /home/deluge/.config/deluge/auth
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Once inside nano, you’ll need to add a line to the configuration file in the following format:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;user&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="n"&gt;password&lt;/span&gt;&lt;span class="o"&gt;:&lt;/span&gt;&lt;span class="mi"&gt;10&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The final number 10 defines the rights of the user (in which case 10 implies the full-access/administrative level). When you’re done editing, hit CTRL+X and save your changes. Once you’ve saved them, start up the daemon again and enter the deluge-console:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo -u deluge deluged
+sudo -u deluge deluge-console
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Once you’re inside the console, we need to make a quick configuration change to enable remote access. Enter the following:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;config -s allow_remote True
+exit
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now it’s time to kill the daemon and restart it one more time so that the config changes take effect:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo pkill deluged
+sudo -u deluge deluged
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now deluge should be ready to accept connections from the &lt;em&gt;Thin Client&lt;/em&gt;! To connect, simply enter the ip address of you Raspberry pi and the credentials you created earlier.&lt;/p&gt;
+&lt;h1&gt;Restrict torrenting traffic to use only the VPN connection&lt;/h1&gt;
+&lt;p&gt;What OpenVPN does by default is pull all traffic over the tunnel it creates. I only wanted my torrent traffic to use the VPN. Now this is where things took me a long time to figure out. Networking is just pretty confusing stuff for someone that never really bothered with it. However, I was able to solve it in the following way:&lt;/p&gt;
+&lt;p&gt;First, we move to the openvpn directory again and make sure openvpn and deluged are not running.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;cd /etc/openvpn
+sudo pkill deluged
+sudo pkill openvpn
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;First we need to allow OpenVPN to change our DNS servers. Now we need to change the configuration file again so we stop openvpn from pulling all traffic to the tunnel.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo sed -i &amp;#39;s|client|client\nscript-security 2\nroute-noexec\nroute-up \/etc\/openvpn\/route-up.sh|&amp;#39; *.conf
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;But this also means we have to add the correct routes for our internet packages as well. For this, we can create the &lt;code&gt;route-up.sh&lt;/code&gt; file. Create the file using&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo nano route-up.sh
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Paste the following contents and save with &lt;code&gt;ctrl+x&lt;/code&gt;. Please note that I assume that the default internet uses the &lt;code&gt;eth0&lt;/code&gt; interface. If it is not, then you should replace each occurence with your specific interface (for example &lt;code&gt;wlan0&lt;/code&gt;).&lt;/p&gt;
+&lt;table class="highlighttable"&gt;&lt;tr&gt;&lt;td class="linenos"&gt;&lt;div class="linenodiv"&gt;&lt;pre&gt; 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20&lt;/pre&gt;&lt;/div&gt;&lt;/td&gt;&lt;td class="code"&gt;&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="ch"&gt;#!/bin/bash&lt;/span&gt;
+
+&lt;span class="nb"&gt;echo&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Delete any pre-existing rules&amp;quot;&lt;/span&gt;
+&lt;span class="c1"&gt;# It&amp;#39;s okay if we get errors if the rules were not found.&lt;/span&gt;
+&lt;span class="c1"&gt;# The end goal is to not have these rules so it&amp;#39;s fine.&lt;/span&gt;
+ip route flush table 111
+iptables -t mangle -D OUTPUT -m owner --uid deluge -j MARK --set-mark 1
+iptables -t nat -D POSTROUTING -m mark --mark &lt;span class="m"&gt;1&lt;/span&gt; -j MASQUERADE
+ip rule del fwmark 0x1 table 111
+
+&lt;span class="nb"&gt;echo&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;Applying routes&amp;quot;&lt;/span&gt;
+iptables -t mangle -A OUTPUT -m owner --uid deluge -j MARK --set-mark 1
+iptables -t nat -A POSTROUTING -m mark --mark &lt;span class="m"&gt;1&lt;/span&gt; -j MASQUERADE
+ip rule add fwmark 0x1 table 111
+
+ip route add 0.0.0.0/1 via &lt;span class="nv"&gt;$route_vpn_gateway&lt;/span&gt; dev &lt;span class="nv"&gt;$dev&lt;/span&gt; table 111
+ip route add 128.0.0.0/1 via &lt;span class="nv"&gt;$route_vpn_gateway&lt;/span&gt; dev &lt;span class="nv"&gt;$dev&lt;/span&gt; table 111
+ip route add &lt;span class="k"&gt;$(&lt;/span&gt;ip route &lt;span class="p"&gt;|&lt;/span&gt; grep -iP &lt;span class="s1"&gt;&amp;#39;eth0.+ src&amp;#39;&lt;/span&gt;&lt;span class="k"&gt;)&lt;/span&gt; table 111
+ip route add blackhole default table 111
+ip route flush cache
+&lt;/pre&gt;&lt;/div&gt;
+&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+
+&lt;p&gt;The script does a couple of things. First, it deletes any pre-existing rules that might be created if you restart OpenVPN in the future. After that, I add multiple filters and routes. First I mark all packets that originate from the &lt;code&gt;deluge&lt;/code&gt; user, which is who will be running the torrent daemon. Then, we tell the kernel to use a different routing table if a outward destined packet is marked. I finish by generating the routes for table 111. The first two &lt;code&gt;ip route add&lt;/code&gt; commands just define the tunnel to our VPN server. The third makes sure that everything that is destined for the local network does not go through the tunnel but over the local network. Finally, a black hole is added. If the connection with the VPN server drops for whatever reason, then the tunnel routes will dissapear. In that case, packets will end up in the blackhole and can not secretly exit through our local network. This is &lt;em&gt;killswitch&lt;/em&gt; to make sure no torrent traffic leaves the Raspberry Pi unsecured.&lt;/p&gt;
+&lt;p&gt;Finally we have to make the file executable by everyone.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo chown root route-up.sh
+sudo chmod +x route-up.sh
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now we can test whether everything works fine. First start OpenVPN.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo openvpn --daemon --config /etc/openvpn/&amp;lt;file&amp;gt;.conf
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;And test that it works.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;curl https://jsonip.com
+sudo -u deluge curl https://jsonip.com
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Both commands should return a different IP, as one is run by you as an user, and the other is run by the &lt;code&gt;deluge&lt;/code&gt; user. If you pass this test, then we can start deluge&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo -u deluge deluged
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;If everything is allright, you should be able to connect to deluge using your client over the local network, but the actual torrent traffic is tunneled over the VPN.  If your OpenVPN came with a &lt;code&gt;/etc/openvpn/update-resolv-conf&lt;/code&gt; file (Google it if not!) you can also hide your default DNS using:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo sed -i &amp;#39;s|client|client\nscript-security 2\nup \/etc\/openvpn\/update-resolv-conf\ndown \/etc\/openvpn\/update-resolv-conf|&amp;#39; *.conf
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;That's all for now! I hope this helped for you, if it did, please leave a message!&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Additional remark: Make sure that the deluge user has write access to the directory that you want you torrents to be saved. Otherwise this will result in an error immediately after starting a torrent&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Update:&lt;/strong&gt;
+The ability to mark and forward network packages using iptables is not enabled by default on newer Ubuntu installations, as is pointed out by &lt;a href="http://themediaserver.com/bypass-vpn-connections-specifics-ports-ubuntu-kodibuntu/"&gt;this blogpost&lt;/a&gt;. Following the above steps will thus work in a torrent client without a connection (due to the killswitch functionality). To enable, one has to change some kernel options. Please run the following code to switch the relevant options on:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo sysctl -w net.ipv4.conf.eth0.rp_filter=0
+sudo sysctl -w net.ipv4.conf.tun0.rp_filter=0
+sudo sysctl -w net.ipv4.conf.all.rp_filter=0
+sudo sysctl -w net.ipv4.conf.default.rp_filter=0
+sudo sysctl -w net.ipv4.conf.lo.rp_filter=0
+
+sudo sysctl -w net.ipv4.conf.all.forwarding=1
+sudo sysctl -w net.ipv4.conf.default.forwarding=1
+sudo sysctl -w net.ipv4.conf.eth0.forwarding=1
+sudo sysctl -w net.ipv4.conf.lo.forwarding=1
+sudo sysctl -w net.ipv4.conf.tun0.forwarding=1
+
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+sudo sysctl -w net.ipv6.conf.default.forwarding=1
+sudo sysctl -w net.ipv6.conf.eth0.forwarding=1
+sudo sysctl -w net.ipv6.conf.lo.forwarding=1
+sudo sysctl -w net.ipv6.conf.tun0.forwarding=1
+
+sudo sysctl -w net.ipv4.tcp_fwmark_accept=1
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now reboot the system and start the openVPN connection and test if the IP changes if an URL is fetched by the &lt;em&gt;deluge&lt;/em&gt; user:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;curl https://jsonip.com
+sudo -u deluge curl https://jsonip.com
+&lt;/pre&gt;&lt;/div&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Tue, 15 Nov 2016 23:10:00 +0100</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-11-15:post/Secure-torrenting.html</guid><category>Raspberry Pi 3</category><category>Settings</category></item><item><title>Initializing the Raspberry Pi 3 Part II</title><link>https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3-part-II.html</link><description>&lt;p&gt;Here I will be updating some of my adventures with my RPi3. I will be pushing SSH keys for secure connecting and I will set up how to boot from USB. I also assume that we are working on &lt;em&gt;bash on ubuntu for windows&lt;/em&gt;, which is new since the Anniversary update of Windows on 10. This allows me to directly connect with my Raspberry Pi without additional software for Windows PC's. However, you can use any preferred SSH client for Windows.&lt;/p&gt;
+&lt;h1&gt;Programming USB boot mode&lt;/h1&gt;
+&lt;p&gt;Next up is programming the Pi to boot from the USB. This is now supported in the newest releases of raspbian, but only for the Raspberry Pi 3. This special mode completely removes the need for having a SD card inserted.&lt;/p&gt;
+&lt;p&gt;First, prepare the &lt;code&gt;/boot&lt;/code&gt; directory with experimental boot files:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;# If on raspbian lite you need to install rpi-update before you can use it:
+$ sudo apt-get update; sudo apt-get install rpi-update
+$ sudo BRANCH=next rpi-update
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Then enable USB boot mode with this code:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;echo program_usb_boot_mode=1 | sudo tee -a /boot/config.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Reboot the Pi with sudo reboot, then check that the OTP has been programmed with:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;$ vcgencmd otp_dump &lt;span class="p"&gt;|&lt;/span&gt; grep 17:
+17:3020000a
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Ensure the output &lt;code&gt;0x3020000a&lt;/code&gt; is correct.&lt;/p&gt;
+&lt;p&gt;If you wish, you can remove the &lt;code&gt;program_usb_boot_mode&lt;/code&gt; line from config.txt (make sure there is no blank line at the end) so that if you put the SD card in another Pi, it won't program USB boot mode. You can do this with &lt;code&gt;sudo nano /boot/config.txt&lt;/code&gt;, for example.&lt;/p&gt;
+&lt;h1&gt;Preparing the USB storage device&lt;/h1&gt;
+&lt;p&gt;We will start by using Parted to create a 100MB FAT32 partition, followed by a Linux ext4 partition that will contain the Raspbian distribution. Additionally I wanted two NTFS drives myself that serve as datawarehouses and network drives for my desktop computer.&lt;/p&gt;
+&lt;p&gt;First, make sure that NTFS support is installed.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo apt-get install ntfs-3g
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Then format the USB drive to our needs.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo parted /dev/sda
+
+(parted) mktable msdos
+Warning: The existing disk label on /dev/sda will be destroyed and all data on this disk will be lost. Do you want to
+continue?
+Yes/No? Yes
+(parted) mkpart primary fat32 0% 100M
+(parted) mkpart primary ext4 100M 10G
+(parted) mkpart primary ntfs 10G 610G
+(parted) mkpart primary ntfs 610G 100%
+(parted) print
+Model: SAMSUNG HD154UI (scsi)
+Disk /dev/sda: 1500GB
+Sector size (logical/physical): 512B/512B
+Partition Table: msdos
+Disk Flags:
+
+Number  Start   End     Size    Type     File system  Flags
+ 1      1049kB  99.6MB  98.6MB  primary  fat32        lba
+ 2      99.6MB  10.0GB  9901MB  primary  ext4         lba
+ 3      10.0GB  610GB   600GB   primary  ntfs         lba
+ 4      610GB   1500GB  890GB   primary  ntfs         lba
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Your parted print output should look similar to the one above.&lt;/p&gt;
+&lt;p&gt;Create the boot and root file systems:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo mkfs.vfat -n BOOT -F 32 /dev/sda1
+sudo mkfs.ext4 /dev/sda2
+sudo mkfs.ntfs /dev/sda3 -f
+sudo mkfs.ntfs /dev/sda4 -f
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Mount the target file system and copy the running raspbian system to it:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo mkdir /mnt/target
+sudo mount /dev/sda2 /mnt/target/
+sudo mkdir /mnt/target/boot
+sudo mount /dev/sda1 /mnt/target/boot/
+sudo apt-get update; sudo apt-get install rsync
+sudo rsync -ax --progress / /boot /mnt/target
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Regenerate ssh host keys:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;cd /mnt/target
+sudo mount --bind /dev dev
+sudo mount --bind /sys sys
+sudo mount --bind /proc proc
+sudo chroot /mnt/target
+rm /etc/ssh/ssh_host*
+dpkg-reconfigure openssh-server
+exit
+sudo umount dev
+sudo umount sys
+sudo umount proc
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Edit /boot/cmdline.txt so that it uses the USB storage device as the root file system instead of the SD card.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo sed -i &amp;quot;s,root=/dev/mmcblk0p2,root=/dev/sda2,&amp;quot; /mnt/target/boot/cmdline.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The same needs to be done for fstab:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo sed -i &amp;quot;s,/dev/mmcblk0p,/dev/sda,&amp;quot; /mnt/target/etc/fstab
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Finally, unmount the target file systems, and power the Pi off.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;cd ~
+sudo umount /mnt/target/boot
+sudo umount /mnt/target
+sudo poweroff
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Disconnect the power supply from the Pi, remove the SD card, and reconnect the power supply. If all has gone well, the Pi should begin to boot after a few seconds.&lt;/p&gt;
+&lt;h1&gt;Passwordless access using SSH keys&lt;/h1&gt;
+&lt;p&gt;If your Pi does not have an .ssh directory you will need to set one up so that you can copy the key from your computer.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;cd ~
+install -d -m 700 ~/.ssh
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;To copy your public key to your Raspberry Pi, use the following command to append the public key to your authorized_keys file on the Pi, sending it over SSH. First exit the pi using &lt;code&gt;logout&lt;/code&gt;. Then from your linux (or ubuntu for windows) distribution transfer the keys:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;cat ~/.ssh/id_rsa.pub | ssh &amp;lt;username&amp;gt;@&amp;lt;address of RPi&amp;gt; &amp;quot;cat &amp;gt;&amp;gt; .ssh/authorized_keys&amp;quot;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now if you have the correct &lt;code&gt;id_rsa&lt;/code&gt; in your (non-RPi) OS in the &lt;code&gt;.ssh&lt;/code&gt; folder, then logging into the RPi should not ask for a password again!&lt;/p&gt;
+&lt;p&gt;Disallowing password login. To disallow password login we need to edit the ssh config found in /etc/ssh/sshd_config. Do do this we can ssh into the Pi. Once at the prompt we can enter the following:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo nano /etc/ssh/sshd_config
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;scroll down to the section that says &lt;code&gt;#PasswordAuthentication yes&lt;/code&gt; and uncomment it to no. Save it using &lt;code&gt;CTRL+X&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;From now on it is only possible to login on the RPi using the correct SSH keys!&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Wed, 05 Oct 2016 20:15:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-10-05:post/Initializing-the-raspberry-pi-3-part-II.html</guid><category>Raspberry Pi 3</category><category>Settings</category></item><item><title>Converting TTMIK lessons from PDF to PNG files</title><link>https://blog.laurens.xyz/post/TTMIK-pdf-to-png.html</link><description>&lt;p&gt;I didn't just &lt;a href="https://blog.laurens.xyz/post/scraping-media-from-TTMIK.html"&gt;scrape all TTMIK lessons&lt;/a&gt; for archival purposes. What I really wanted is a structured way for me to study the lessons. I found that reading lessons without reviewing them regularly did not stick. If only there was a way to have some sorted of spaced repetition algorithm, perhaps something like &lt;a href="www.ankisrs.net"&gt;Anki&lt;/a&gt;...&lt;/p&gt;
+&lt;h1&gt;Porting TTMIK content to Anki&lt;/h1&gt;
+&lt;p&gt;One of the problems with the PDF files is that Anki and/or AnkiDroid do not have native support for PDF files. My initial solution was just to have little notes that referred to lessons, and I would have to pull the lesson on screen using some media device myself. Clearly, this was bothering as sometimes I just want to quickly review a lesson when a short timeslot becomes available during the day (yes, a toilet session is one of them). Luckily enough Anki does have image support which we can depend on.&lt;/p&gt;
+&lt;p&gt;The Python script at the bottom of this post serves to convert the PDF files of the lessons to PNG images. I have not used this script in a while and I might have broken it in the meantime. I highly doubt anyone will ever need it again as I will simply post the output myself. If someone out there happens to need this, please note that &lt;a href="http://www.ghostscript.com/download/gsdnld.html"&gt;ghostscript&lt;/a&gt; is required.&lt;/p&gt;
+&lt;h3&gt;The python script&lt;/h3&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;fnmatch&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;os&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;subprocess&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;traceback&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;PIL&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ImageChops&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;math&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;ceil&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;floor&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;sys&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;gs_pdf_to_png&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pdffilepath&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;output&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;resolution&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="sd"&gt;&amp;quot;&amp;quot;&amp;quot;Converts a pdf to a png image&lt;/span&gt;
+&lt;span class="sd"&gt;    &amp;quot;&amp;quot;&amp;quot;&lt;/span&gt;
+    &lt;span class="n"&gt;GHOSTSCRIPTCMD&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;C:&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;Program Files (x86)&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;gs&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;gs9.18&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;bin&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;gswin32.exe&amp;quot;&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;isfile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pdffilepath&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;#39; is not a file. Skip.&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;pdffilepath&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;pdfname&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ext&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;splitext&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pdffilepath&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;try&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="c1"&gt;# Change the &amp;quot;-rXXX&amp;quot; option to set the PNG&amp;#39;s resolution.&lt;/span&gt;
+        &lt;span class="c1"&gt;# http://ghostscript.com/doc/current/Devices.htm#File_formats&lt;/span&gt;
+        &lt;span class="c1"&gt;# For other commandline options see&lt;/span&gt;
+        &lt;span class="c1"&gt;# http://ghostscript.com/doc/current/Use.htm#Options&lt;/span&gt;
+        &lt;span class="n"&gt;arglist&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;GHOSTSCRIPTCMD&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                   &lt;span class="s2"&gt;&amp;quot;-dBATCH&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                   &lt;span class="s2"&gt;&amp;quot;-dNOPAUSE&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                   &lt;span class="s2"&gt;&amp;quot;-sOutputFile=&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;output&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;-&lt;/span&gt;&lt;span class="si"&gt;%03d&lt;/span&gt;&lt;span class="s2"&gt;.png&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                   &lt;span class="s2"&gt;&amp;quot;-sDEVICE=png16m&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                   &lt;span class="s2"&gt;&amp;quot;-r&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;resolution&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                   &lt;span class="n"&gt;pdffilepath&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Running command:&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39; &amp;#39;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;arglist&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;sp&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;subprocess&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Popen&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+            &lt;span class="n"&gt;args&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;arglist&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+            &lt;span class="n"&gt;stdout&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;subprocess&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;PIPE&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+            &lt;span class="n"&gt;stderr&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;subprocess&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;PIPE&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;except&lt;/span&gt; &lt;span class="ne"&gt;OSError&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;sys&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;exit&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Error executing Ghostscript (&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;#39;). Is it in your PATH?&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt;
+                 &lt;span class="n"&gt;GHOSTSCRIPTCMD&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;except&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Error while running Ghostscript subprocess. Traceback:&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Traceback:&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;traceback&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format_exc&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;
+
+    &lt;span class="n"&gt;stdout&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;stderr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;sp&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;communicate&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Ghostscript stdout:&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s2"&gt;&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;#39;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;stdout&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;stderr&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Ghostscript stderr:&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s2"&gt;&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s2"&gt;&amp;#39;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;stderr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;merge_images&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;indexstr&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="sd"&gt;&amp;quot;&amp;quot;&amp;quot;Merge documents in PNG format that include a header and footer.&lt;/span&gt;
+
+&lt;span class="sd"&gt;    The header and footer are removed and are only added at the top and bottom of&lt;/span&gt;
+&lt;span class="sd"&gt;    the merged image.&lt;/span&gt;
+&lt;span class="sd"&gt;    &amp;quot;&amp;quot;&amp;quot;&lt;/span&gt;
+    &lt;span class="n"&gt;pngimgs&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fnmatch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;listdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;-*.png&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;width&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;height&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pngimgs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# In TTMIK lessons both the header and footer are each 10% of the height.&lt;/span&gt;
+    &lt;span class="c1"&gt;# First save a copy of the header and footer.&lt;/span&gt;
+    &lt;span class="n"&gt;footer&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pngimgs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;crop&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;floor&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;height&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="mf"&gt;0.9&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;width&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;height&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="n"&gt;header&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pngimgs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;crop&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;width&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;floor&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;height&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="mf"&gt;0.1&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# Create a list of images that will be merged. Starting with the header and&lt;/span&gt;
+    &lt;span class="c1"&gt;# ending with the footer.&lt;/span&gt;
+    &lt;span class="n"&gt;images&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;header&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pngimgs&lt;/span&gt;&lt;span class="p"&gt;)):&lt;/span&gt;
+        &lt;span class="n"&gt;im&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pngimgs&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+        &lt;span class="n"&gt;im&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;im&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;crop&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ceil&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;height&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="mf"&gt;0.1&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;width&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ceil&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;height&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="mf"&gt;0.9&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+        &lt;span class="n"&gt;images&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;crop_whitespace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;im&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="n"&gt;images&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;footer&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# Now merge the images&lt;/span&gt;
+    &lt;span class="n"&gt;total_height&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;sum&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="n"&gt;im&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;im&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;images&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+    &lt;span class="n"&gt;new_im&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;RGB&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;width&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;total_height&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="n"&gt;y_offset&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;im&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;images&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;new_im&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;paste&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;im&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;y_offset&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;y_offset&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="n"&gt;im&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="n"&gt;new_im&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;save&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.png&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;crop_whitespace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="sd"&gt;&amp;quot;&amp;quot;&amp;quot;Remove surrounding empty space around an image.&lt;/span&gt;
+
+&lt;span class="sd"&gt;    This implemenation assumes that the surrounding space has the same colour&lt;/span&gt;
+&lt;span class="sd"&gt;    as the top leftmost pixel.&lt;/span&gt;
+&lt;span class="sd"&gt;    &amp;quot;&amp;quot;&amp;quot;&lt;/span&gt;
+    &lt;span class="n"&gt;bg&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;new&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;mode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;getpixel&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+    &lt;span class="n"&gt;diff&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;ImageChops&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;difference&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;bg&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;bbox&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;diff&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;getbbox&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;bbox&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;bbox&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;crop&lt;/span&gt;&lt;span class="p"&gt;((&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;image&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;size&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;bbox&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;]))&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;delete_cache&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;indexstr&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;pngimgs&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fnmatch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;listdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;-*.png&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;f&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;pngimgs&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;remove&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+
+&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;__name__&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;__main__&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;chdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;C:\mydir&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# First check where to start (in case process was interrupted previously)&lt;/span&gt;
+    &lt;span class="n"&gt;index&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="n"&gt;finishedimgs&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fnmatch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;listdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;*.png&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%03d&lt;/span&gt;&lt;span class="s1"&gt;.png&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;index&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;finishedimgs&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;index&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%03d&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;index&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# Set the first PDF file we want to start with. Assumes that the PDF files start&lt;/span&gt;
+    &lt;span class="c1"&gt;# with the prefix TTMIK xxx&lt;/span&gt;
+    &lt;span class="n"&gt;pdffile&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fnmatch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;listdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;TTMIK &amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;*.pdf&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+
+    &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pdffile&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;gs_pdf_to_png&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pdffile&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;indexstr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;300&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;merge_images&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;indexstr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;delete_cache&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;indexstr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="n"&gt;index&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+        &lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="si"&gt;%03d&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;index&lt;/span&gt;
+        &lt;span class="n"&gt;pdffile&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fnmatch&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;filter&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;listdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;TTMIK &amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;indexstr&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;*.pdf&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h1&gt;The result: a TTMIK deck!&lt;/h1&gt;
+&lt;p&gt;I have run the script and gathered the images. One example of a lesson looks like this after conversion:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;img alt="TTMIK lesson" src="https://ankiweb.net/shared/mpreview/816509991/0.png" /&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;For my and your convenience I added all the images to a Anki deck and added some metadata. You can just grab this Anki deck and start studying the &lt;em&gt;talk to me in korean&lt;/em&gt; lessons with discipline and efficiency! &lt;a href="https://ankiweb.net/shared/info/816509991"&gt;Just grab it here&lt;/a&gt;&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Mon, 20 Jun 2016 12:44:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-06-20:post/TTMIK-pdf-to-png.html</guid><category>Anki</category><category>Korean</category><category>converting pdf to png</category><category>TTMIK</category><category>Python</category></item><item><title>Multitasking in Python with multiprocessing</title><link>https://blog.laurens.xyz/post/multitasking-in-python.html</link><description>&lt;p&gt;I have been wanting to look at multiprocessing capabilities for some time now and I
+finally got around to it. Python is a great expressive language that is easy to code
+and easy to read. It really is my favourite language. One of the limits of Python is
+the lack of multithreading and/or multiprocessing. A Python process will always be
+running on a single. I suppose this made sense given in the days where computers
+with multiple processing cores were not as abundant as now. However, now a Python
+script can really seem to lack in speed simply because of this limitation.&lt;/p&gt;
+&lt;p&gt;I have come across multiple situations where I had wished that I access the extra
+cores that I have available. Some of the math questions I like to solve at &lt;a href="www.projecteuler.net"&gt;Project
+Euler&lt;/a&gt; were rather computationally intensive and had
+&lt;a href="https://en.wikipedia.org/wiki/Embarrassingly_parallel"&gt;emberassingly parallel&lt;/a&gt;
+properties that could easily be exploited to improve performance. The same holds for
+financial computations, where monte carlo simulations often appear that could
+benefit from the same parallelisation. Being able to write parallel code really
+could help me out.&lt;/p&gt;
+&lt;h1&gt;The Multiprocessing package The solution to this can be find in the Standard&lt;/h1&gt;
+&lt;p&gt;Library of Python. The &lt;em&gt;Multiprocessing&lt;/em&gt; module provides us a lot of the tools
+ that we need. First of all, the Multiprocessing package is very similar to the
+ Threading package. The difference between multiprocessing and multithreading was
+ confusing to me at first but is actually quite simple. Multiprocesses spawns new
+ Python processes. One should see these as seperate Python instances that can run
+ on another core and is thus able to perform more calculations in the same amount
+ of time. Since a completely new Python interpreter is launched, sharing objects
+ and data is much harder.&lt;/p&gt;
+&lt;p&gt;Multithreading on the other hand does not launch a new Python instance. Instead it
+spawns threads that run in the same Python process. My first thought was that this
+is pretty useless as it does not really solve the problem of accessing more cores
+because it uses the same process that is bound to a single core. But don't be
+fooled, as threads simply serve an entirely different purpose. When your
+computations is mainly bound by the (lack of) speed of I/O operations, then threads
+really are all you need. When performing an I/O operation, Python blocks the
+complete process and waits for the operation to finish before it can continue (so
+called &lt;em&gt;synchronous&lt;/em&gt; behaviour). If you need to do many of these operations and they
+are independent of eachother, then one would like to run several of these operations
+simultaneously. With threads, this is possible.&lt;/p&gt;
+&lt;p&gt;Now you might wonder, should I learn about two different packages depending on my
+specific needs? The answer is no. A need little trick about the multiprocessing
+package is that it can serve as a wrapper around the multithreading package. Simply
+instead of&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;multiprocessing&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Process&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;one can alternatively use&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;multiprocessing.dummy&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Process&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I thought this is quite neat trick if all that is needed are threads instead of
+actual processes.&lt;/p&gt;
+&lt;h2&gt;My example: multitasking with deamonic processes&lt;/h2&gt;
+&lt;p&gt;For one of my projects, I wanted to be able to run several workers simultaneously.
+These workers would then each complete independent tasks indefinitely. That is,
+these worker processes would be
+&lt;a href="https://en.wikipedia.org/wiki/Daemon_(computing)"&gt;daemonic&lt;/a&gt;. Something that was
+specific to my need is that workers are not equals. Worker A would be doing very
+different tasks than worker B. And if any of the workers crash, their respective
+tasks will be left undone. Hence, it is essential that workers are restarted upon
+failure.&lt;/p&gt;
+&lt;p&gt;After some testing, the following script does exactly what I need:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;multiprocessing&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Process&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;time&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;sleep&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;sys&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;functools&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;wraps&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;random&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;randint&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;error_catching&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;func&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="nd"&gt;@wraps&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;func&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="c1"&gt;#wraps allows pickling of decorators&lt;/span&gt;
+    &lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;my_func&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;args&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;**&lt;/span&gt;&lt;span class="n"&gt;kwargs&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;process_number&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;randint&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;99999&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="bp"&gt;True&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="k"&gt;try&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;func&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;process_number&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;args&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;**&lt;/span&gt;&lt;span class="n"&gt;kwargs&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;except&lt;/span&gt; &lt;span class="ne"&gt;KeyboardInterrupt&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Keyboard interrupt in worker&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;process_number&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;return&lt;/span&gt;
+            &lt;span class="k"&gt;except&lt;/span&gt; &lt;span class="ne"&gt;Exception&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Error in worker {}:&lt;/span&gt;&lt;span class="se"&gt;\n\t&lt;/span&gt;&lt;span class="s2"&gt;{}&lt;/span&gt;&lt;span class="se"&gt;\n\t&lt;/span&gt;&lt;span class="s2"&gt;Restarting in 3 seconds...&amp;quot;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;process_number&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;repr&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;e&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+                &lt;span class="n"&gt;sleep&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;my_func&lt;/span&gt;
+
+
+&lt;span class="nd"&gt;@error_catching&lt;/span&gt;
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;f&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;process_number&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;starting worker:&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;process_number&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="bp"&gt;True&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="c1"&gt;# The process defined by this function will repeat these operations indefinitely&lt;/span&gt;
+        &lt;span class="n"&gt;sleep&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Worker {} checks in.&amp;quot;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;process_number&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+
+
+&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;__name__&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;__main__&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;processes&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[]&lt;/span&gt;
+
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;p&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Process&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;target&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;f&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;daemon&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;True&lt;/span&gt;
+        &lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;start&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;processes&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;append&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;p&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;try&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="bp"&gt;True&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;sleep&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;except&lt;/span&gt; &lt;span class="ne"&gt;KeyboardInterrupt&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Keyboard interrupt in main&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;sys&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;exit&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Some take-aways that I should remember whilst I designed these scripts are:
+- One can not simply add decorator functions to functions that are spawned as a
+process as this results in a function that cannot be pickled. The solution is to
+include an additional &lt;code&gt;wraps&lt;/code&gt; decorator from the &lt;code&gt;functools&lt;/code&gt; package.
+- One should assign daemon flags to daemon processes. Otherwise the processes do not
+shut down when the main process tries to terminate.&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Sun, 29 May 2016 16:02:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-05-29:post/multitasking-in-python.html</guid><category>Python</category><category>Multiprocessing</category><category>Multithreading</category></item><item><title>Scraping media from TTMIK</title><link>https://blog.laurens.xyz/post/scraping-media-from-TTMIK.html</link><description>&lt;p&gt;My previous post already revealed that I like to study Korean. Mastering the Korean
+language is not an easy task so every little bit that helps to make it more
+convenient or easier will help study. Having local copies of the study material
+provided by the folks at &lt;a href="wTalktomeinkorean.com"&gt;Talk To Me in Korean&lt;/a&gt; already goes
+a long way.&lt;/p&gt;
+&lt;p&gt;I have a Python script laying around that did exactly this. It crawls
+the pages of TTMIK and collects all PDF files and podcasts of the lessons from level 1 to 9 to a folder. All
+the details belonging to the levels are automatically indexed in a &lt;code&gt;txt&lt;/code&gt; document:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;1   1   1   Hello, Thank you / 안녕하세요, 감사합니다 TTMIK 001 - Level 1 Lesson 1
+2   1   2   Yes, No, What? / 네, 아니요, 네? TTMIK 002 - Level 1 Lesson 2
+3   1   3   Good-bye, See you / 안녕히 가세요, 안녕히 계세요, 안녕    TTMIK 003 - Level 1 Lesson 3
+4   1   4   I’m sorry, Excuse me / 죄송합니다, 저기요   TTMIK 004 - Level 1 Lesson 4
+5   1   5   It’s me, What is it? / 이에요,예요   TTMIK 005 - Level 1 Lesson 5
+6   1   6   What is this?,  This is …. / 이거, 이거 뭐예요?    TTMIK 006 - Level 1 Lesson 6
+7   1   7   This, That, It / 이, 그, 저    TTMIK 007 - Level 1 Lesson 7
+8   1   8   It’s NOT me / 아니에요  TTMIK 008 - Level 1 Lesson 8
+9   1   9   topic,subject marking particles / 은, 는, 이, 가    TTMIK 009 - Level 1 Lesson 9
+10  1   10  have, don’t have, there is, there isn’t / 있어요, 없어요  TTMIK 010 - Level 1 Lesson 10
+11  1   11  Please give me / 주세요    TTMIK 011 - Level 1 Lesson 11
+12  1   12  it’s delicious, it tastes awful, thank you for the food / 맛있어요, 맛없어요, 잘 먹겠습니다, 잘 먹었습니다  TTMIK 012 - Level 1 Lesson 12
+13  1   13  I want to … / -고 싶어요    TTMIK 013 - Level 1 Lesson 13
+14  1   14  What do you want to do? / 뭐 하고 싶어요? TTMIK 014 - Level 1 Lesson 14
+15  1   15  Sino-Korean Numbers / 일, 이, 삼, 사 …. TTMIK 015 - Level 1 Lesson 15
+16  1   16  Basic Present Tense / -아요, -어요, -여요 TTMIK 016 - Level 1 Lesson 16
+17  1   17  Past Tense / -았/었/였어요 (했어요) TTMIK 017 - Level 1 Lesson 17
+18  1   18  Location-marking Particles / 에/에서   TTMIK 018 - Level 1 Lesson 18
+19  1   19  When / 언제   TTMIK 019 - Level 1 Lesson 19
+20  1   20  Native Korean numbers / 하나, 둘, 셋, 넷 …   TTMIK 020 - Level 1 Lesson 20
+21  1   21  Negative Sentences / 안, -지 않다, 안 하다, 하지 않다  TTMIK 021 - Level 1 Lesson 21
+22  1   22  verbs / 하다  TTMIK 022 - Level 1 Lesson 22
+23  1   23  Who? / 누구?  TTMIK 023 - Level 1 Lesson 23
+24  1   24  Why? How? / 왜? 어떻게? TTMIK 024 - Level 1 Lesson 24
+25  1   25  From A To B,  From C Until D / -에서/부터 -까지   TTMIK 025 - Level 1 Lesson 25
+26  2   1   Future Tense / -ㄹ/을 거예요, 할 거예요  TTMIK 026 - Level 2 Lesson 1
+27  2   2   object marking particles / 을, 를 TTMIK 027 - Level 2 Lesson 2
+28  2   3   and, and then, therefore, so / 그리고, 그래서 TTMIK 028 - Level 2 Lesson 3
+29  2   4   and, with / 하고, (이)랑    TTMIK 029 - Level 2 Lesson 4
+30  2   5   days in a week / 요일 TTMIK 030 - Level 2 Lesson 5
+31  2   6   but, however / 그렇지만, 그런데    TTMIK 031 - Level 2 Lesson 6
+32  2   7   “to” someone, “from” someone / 한테, 한테서  TTMIK 032 - Level 2 Lesson 7
+33  2   8   Telling the time / 한 시, 두 시, 세 시, 네 시 … TTMIK 033 - Level 2 Lesson 8
+34  2   9   Counters / 개, 명 TTMIK 034 - Level 2 Lesson 9
+35  2   10  Present Progressive / -고 있어요    TTMIK 035 - Level 2 Lesson 10
+36  2   11  Self-introduction / 자기소개    TTMIK 036 - Level 2 Lesson 11
+37  2   12  What date is it? / 날짜   TTMIK 037 - Level 2 Lesson 12
+38  2   13  too, also / -도 – Part 1 TTMIK 038 - Level 2 Lesson 13
+39  2   14  too, also / -도 – Part 2 TTMIK 039 - Level 2 Lesson 14
+40  2   15  only / -만   TTMIK 040 - Level 2 Lesson 15
+41  2   16  Very, A bit, Really, Not really, Not at all / 조금, 아주, 정말, 전혀, 별로, 진짜    TTMIK 041 - Level 2 Lesson 16
+42  2   17  can, cannot / -ㄹ 수 있다/없다    TTMIK 042 - Level 2 Lesson 17
+43  2   18  to be good/poor at ~ / 잘 하다/못 하다    TTMIK 043 - Level 2 Lesson 18
+44  2   19  Making verbs into nouns / -는 것  TTMIK 044 - Level 2 Lesson 19
+45  2   20  have to, should, must / -아/어/여야 되다/하다   TTMIK 045 - Level 2 Lesson 20
+46  2   21  more ~ than ~ / ~보다 더   TTMIK 046 - Level 2 Lesson 21
+47  2   22  to like / 좋다 vs 좋아하다    TTMIK 047 - Level 2 Lesson 22
+48  2   23  if, in case / 만약, -(으)면 TTMIK 048 - Level 2 Lesson 23
+49  2   24  still, already / 아직, 벌써 TTMIK 049 - Level 2 Lesson 24
+50  2   25  something, someday, someone, somewhere / 누군가, 무언가, 어딘가, 언젠가 TTMIK 050 - Level 2 Lesson 25
+51  2   26  imperative / -(으)세요 TTMIK 051 - Level 2 Lesson 26
+52  2   27  Do it for me / -아/어/여 주세요   TTMIK 052 - Level 2 Lesson 27
+53  2   28  method, way / (으)로  TTMIK 053 - Level 2 Lesson 28
+54  2   29  more, all / 더, 다    TTMIK 054 - Level 2 Lesson 29
+55  2   30  Don’t do it / -지 마세요    TTMIK 055 - Level 2 Lesson 30
+56  3   1   too much or very / 너무   TTMIK 056 - Level 3 Lesson 1
+57  3   2   linking verbs with -고 / Verb and Verb / 하고  TTMIK 057 - Level 3 Lesson 2
+58  3   3   in front of, behind, on top of, under, next to / 앞에, 옆에, 위에, 밑에, 뒤에 TTMIK 058 - Level 3 Lesson 3
+59  3   4   shall we…? + I wonder… / -(으)ㄹ까요?   TTMIK 059 - Level 3 Lesson 4
+60  3   5   approximately, about / 쯤, 약, 정도 TTMIK 060 - Level 3 Lesson 5
+61  3   6   future tense / -(으)ㄹ 거예요 vs -(으)ㄹ게요 TTMIK 061 - Level 3 Lesson 6
+62  3   7   linking verbs / -아/어/여서 TTMIK 062 - Level 3 Lesson 7
+63  3   8   to look like, to seem like / – 같아요  TTMIK 063 - Level 3 Lesson 8
+64  3   9   to seem like, to look like (used with verbs) / 한 것 같아요  TTMIK 064 - Level 3 Lesson 9
+65  3   10  Before -ing / -기 전에 TTMIK 065 - Level 3 Lesson 10
+66  3   11  ㅂ irregular / ㅂ 불규칙 TTMIK 066 - Level 3 Lesson 11
+67  3   12  But still, nevertheless / 그래도   TTMIK 067 - Level 3 Lesson 12
+68  3   13  Making adjectives (Part 2) / descriptive verbs + -ㄴ 명사  TTMIK 068 - Level 3 Lesson 13
+69  3   14   Making adjectives / action verbs + -는/(으)ㄴ/(으)ㄹ + 명사   TTMIK 069 - Level 3 Lesson 14
+70  3   15  well then, in that case, if so / 그러면, 그럼    TTMIK 070 - Level 3 Lesson 15
+71  3   16  Let’s / -아/어/여요 (청유형)   TTMIK 071 - Level 3 Lesson 16
+72  3   17  in order to, for the sake of / 위하다, 위해, 위해서 TTMIK 072 - Level 3 Lesson 17
+73  3   18  nothing but, only / 밖에 + 부정형    TTMIK 073 - Level 3 Lesson 18
+74  3   19  after -ing / 다음에    TTMIK 074 - Level 3 Lesson 19
+75  3   20  even if, even though / -아/어/여도  TTMIK 075 - Level 3 Lesson 20
+76  3   21  linking verbs / -는데, 명사 + -인데, 형용사 + -ㄴ데    TTMIK 076 - Level 3 Lesson 21
+77  3   22  maybe I might… / -(ㅇ)ㄹ 수도 있어요   TTMIK 077 - Level 3 Lesson 22
+78  3   23  Word builder #1 / 학(學)  TTMIK 078 - Level 3 Lesson 23
+79  3   24  르 irregular / 르 불규칙 TTMIK 079 - Level 3 Lesson 24
+80  3   25  verb ending / -네요   TTMIK 080 - Level 3 Lesson 25
+81  3   26  ㄷ irregular / ㄷ 불규칙 TTMIK 081 - Level 3 Lesson 26
+82  3   27  Politeness Levels /  반말 and 존댓말 TTMIK 082 - Level 3 Lesson 27
+83  3   28  “Let’s” in casual language / 반말, -자 (청유형)   TTMIK 083 - Level 3 Lesson 28
+84  3   29  ㅅ irregular / ㅅ 불규칙 TTMIK 084 - Level 3 Lesson 29
+85  3   30  Word builder 2 / 실(室)   TTMIK 085 - Level 3 Lesson 30
+86  4   1   The more … the more … / -면 -을수록 TTMIK 086 - Level 4 Lesson 1
+87  4   2   Do you want to …? / -(으)ㄹ래요?    TTMIK 087 - Level 4 Lesson 2
+88  4   3   It can’t be … /-(으)ㄹ 리가 없어요, 할 리가 없어요   TTMIK 088 - Level 4 Lesson 3
+89  4   4   verb ending /  -지요/-죠   TTMIK 089 - Level 4 Lesson 4
+90  4   5   “당신” and “you” / 당신 TTMIK 090 - Level 4 Lesson 5
+91  4   6   Word builder 3 / 동(動)   TTMIK 091 - Level 4 Lesson 6
+92  4   7   It’s okay. I’m okay. /  괜찮아요    TTMIK 092 - Level 4 Lesson 7
+93  4   8   it is okay to…, you don’t have to… / -아/어/여도 돼요, 해도 돼요  TTMIK 093 - Level 4 Lesson 8
+94  4   9   you shouldn’t…, you’re not supposed to… / -(으)면 안 돼요, 하면 안 돼요   TTMIK 094 - Level 4 Lesson 9
+95  4   10  among, between / 사이에, 사이에서, 중에, 중에서 TTMIK 095 - Level 4 Lesson 10
+96  4   11  anybody, anything, anywhere / 아무나, 아무도, 아무거나, 아무것도  TTMIK 096 - Level 4 Lesson 11
+97  4   12  to try doing something / -아/어/여 보다, 해 보다    TTMIK 097 - Level 4 Lesson 12
+98  4   13  Word builder 4 / 불(不)   TTMIK 098 - Level 4 Lesson 13
+99  4   14  sometimes, often, always, never, seldom / 가끔, 자주, 별로, 맨날, 항상    TTMIK 099 - Level 4 Lesson 14
+100 4   15  any / 아무 Part 2 TTMIK 100 - Level 4 Lesson 15
+101 4   16  Spacing in Korean / 띄어쓰기    TTMIK 101 - Level 4 Lesson 16
+102 4   17  Word Contractions – Part 1 / 주격 조사, 축약형 TTMIK 102 - Level 4 Lesson 17
+103 4   18  most, best (superlative) / 최상급, 최고  TTMIK 103 - Level 4 Lesson 18
+104 4   19  Less, Not completely / 덜    TTMIK 104 - Level 4 Lesson 19
+105 4   20  Sentence Building Drill #1  TTMIK 105 - Level 4 Lesson 20
+106 4   21  Spacing Part 2 / 띄어쓰기   TTMIK 106 - Level 4 Lesson 21
+107 4   22  Word builder 5 / 장(場)   TTMIK 107 - Level 4 Lesson 22
+108 4   23  Word Contractions – Part 2 / 어떻게/어떡해 – 그렇게 하세요/그러세요, 축약형    TTMIK 108 - Level 4 Lesson 23
+109 4   24  much more, much less / 훨씬   TTMIK 109 - Level 4 Lesson 24
+110 4   25  -(으)ㄹ + noun (future tense noun group) / -(으)ㄹ + 명사, 할 것    TTMIK 110 - Level 4 Lesson 25
+111 4   26  -(으)ㄴ + noun (past tense noun group) / -(으)ㄴ + 명사, 한 것  TTMIK 111 - Level 4 Lesson 26
+112 4   27  I think … (+ future tense) / -(으)ㄴ/(으)ㄹ/ㄴ 것 같다, 한 것 같다, 할 것 같다  TTMIK 112 - Level 4 Lesson 27
+113 4   28  to become + adjective / -아/어/여지다    TTMIK 113 - Level 4 Lesson 28
+114 4   29  to gradually/eventually get to do something / -게 되다, 하게 되다  TTMIK 114 - Level 4 Lesson 29
+115 4   30  Sentence Building Drill #2  TTMIK 115 - Level 4 Lesson 30
+116 5   1   almost did / -(으)ㄹ 뻔 했다, 할 뻔 했다 TTMIK 116 - Level 5 Lesson 1
+117 5   2   -시- (honorific) / -시-, 하시다  TTMIK 117 - Level 5 Lesson 2
+118 5   3   Good work / 수고  TTMIK 118 - Level 5 Lesson 3
+119 5   4   I guess, I assume / -나 보다   TTMIK 119 - Level 5 Lesson 4
+120 5   5   I guess, I assume – Part 2 / -(으)ㄴ가 보다  TTMIK 120 - Level 5 Lesson 5
+121 5   6   Word builder 6 / 문(文)   TTMIK 121 - Level 5 Lesson 6
+122 5   7   as soon as … / -자마자, 하자마자   TTMIK 122 - Level 5 Lesson 7
+123 5   8   It is about to …, I am planning to … /  -(으)려고 하다, 하려고 하다   TTMIK 123 - Level 5 Lesson 8
+124 5   9   While I was doing …, … and then … / -다가, 하다가    TTMIK 124 - Level 5 Lesson 9
+125 5   10  (say) that S + be / -(이)라고 + nouns  TTMIK 125 - Level 5 Lesson 10
+126 5   11  Sentence Building Drill #3  TTMIK 126 - Level 5 Lesson 11
+127 5   12  Noun + -(이)라는 + Noun / Someone that is called ABC / Someone who says s/he is XYZ    TTMIK 127 - Level 5 Lesson 12
+128 5   13  Word Builder lesson 7 / 회 (會)   TTMIK 128 - Level 5 Lesson 13
+129 5   14  -(으)니까, -(으)니 / Since, Because, As  TTMIK 129 - Level 5 Lesson 14
+130 5   15  At least, Instead, It might not be the best but… / -(이)라도   TTMIK 130 - Level 5 Lesson 15
+131 5   16  Narrative Present Tense in Korean / -(ㄴ/는)다,  하다 vs 해요 vs 한다    TTMIK 131 - Level 5 Lesson 16
+132 5   17  Quoting someone in Korean / -(ㄴ/는)다는, -(ㄴ/는)다고  TTMIK 132 - Level 5 Lesson 17
+133 5   18  Whether or not / -(으)ㄴ/는지   TTMIK 133 - Level 5 Lesson 18
+134 5   19  to tell someone to do something /  Verb + -(으)라고 + Verb TTMIK 134 - Level 5 Lesson 19
+135 5   20  Sentence Building Drill #4  TTMIK 135 - Level 5 Lesson 20
+136 5   21  Word Contractions Part 3 / 이거를 –&amp;gt; 이걸, 축약형   TTMIK 136 - Level 5 Lesson 21
+137 5   22  Word builder 8 / 식 (食)  TTMIK 137 - Level 5 Lesson 22
+138 5   23  it seems like … / I assume … / -(으)려나 보다    TTMIK 138 - Level 5 Lesson 23
+139 5   24  Not A But B, Don’t do THIS but do THAT / 말고, -지 말고  TTMIK 139 - Level 5 Lesson 24
+140 5   25  Compared to, Relatively / -에 비해서 -ㄴ/은/는 편이다 /   TTMIK 140 - Level 5 Lesson 25
+141 5   26  Instead of … / 대신에, -는 대신에  TTMIK 141 - Level 5 Lesson 26
+142 5   27  You know, Isn’t it, You see…, Come on… / -잖아(요) TTMIK 142 - Level 5 Lesson 27
+143 5   28   to have no other choice but to … / -(으)ㄹ 수 밖에 없다   TTMIK 143 - Level 5 Lesson 28
+144 5   29  they said that they had done …, they said that they would … / -았/었/였다고, -(으)ㄹ 거라고   TTMIK 144 - Level 5 Lesson 29
+145 5   30  Sentence Building Drill #5  TTMIK 145 - Level 5 Lesson 30
+146 6   1   How about …? / ~ 어때요?   TTMIK 146 - Level 6 Lesson 1
+147 6   2   What do you think about …? / 어떻게 생각하세요? / 어떤 것 같아요? TTMIK 147 - Level 6 Lesson 2
+148 6   3   One of the most … / 가장 ~ 중의 하나  TTMIK 148 - Level 6 Lesson 3
+149 6   4   Do you mind if I …? / -아/어/여도 돼요?   TTMIK 149 - Level 6 Lesson 4
+150 6   5   I’m in the middle of …-ing / -는 중이에요    TTMIK 150 - Level 6 Lesson 5
+151 6   6   Word Builder Lesson 9 / -님  TTMIK 151 - Level 6 Lesson 6
+152 6   7   One way or the other / 어차피  TTMIK 152 - Level 6 Lesson 7
+153 6   8   I’m not sure if … / -(으/느)ㄴ지 잘 모르겠어요.   TTMIK 153 - Level 6 Lesson 8
+154 6   9   While you are at it / -(으)ㄴ/는 김에 /  TTMIK 154 - Level 6 Lesson 9
+155 6   10  Sentence Building Drill 6   TTMIK 155 - Level 6 Lesson 10
+156 6   11  I mean… / 그러니까, 제 말 뜻은, -라고요, 말이에요  TTMIK 156 - Level 6 Lesson 11
+157 6   12  What do you mean? What does that mean? / 무슨 말이에요?   TTMIK 157 - Level 6 Lesson 12
+158 6   13  Word Builder 10 TTMIK 158 - Level 6 Lesson 13
+159 6   14  “/ (slash)” or “and” /  -(으)ㄹ 겸 TTMIK 159 - Level 6 Lesson 14
+160 6   15  the thing that is called, what they call … /  -(이)라는 것  TTMIK 160 - Level 6 Lesson 15
+161 6   16  -겠- (suffix)    TTMIK 161 - Level 6 Lesson 16
+162 6   17  because, since, let me tell you… / -거든(요)   TTMIK 162 - Level 6 Lesson 17
+163 6   18  – Or / -거나, -(이)나, 아니면  TTMIK 163 - Level 6 Lesson 18
+164 6   19  to improve, to change, to increase / -아/어/여지다 Part 2    TTMIK 164 - Level 6 Lesson 19
+165 6   20  Sentence Building Drill 7   TTMIK 165 - Level 6 Lesson 20
+166 6   21  Passive Voice in Korean – Part 1    TTMIK 166 - Level 6 Lesson 21
+167 6   22  Word Builder 11 / 무 TTMIK 167 - Level 6 Lesson 22
+168 6   23  Passive Voice – Part 2  TTMIK 168 - Level 6 Lesson 23
+169 6   24  I DID do it, I DO like it / -기는 하다  TTMIK 169 - Level 6 Lesson 24
+170 6   25  Easy/difficult to + V / -기 쉽다/어렵다   TTMIK 170 - Level 6 Lesson 25
+171 6   26  I thought I would …, I didn’t think you would … / -(으)ㄴ/ㄹ 줄 알다  TTMIK 171 - Level 6 Lesson 26
+172 6   27  can, to be able to, to know how to / -(으)ㄹ 수 있다, -(으)ㄹ 줄 알다 TTMIK 172 - Level 6 Lesson 27
+173 6   28  it depends on … / -에 따라 달라요 TTMIK 173 - Level 6 Lesson 28
+174 6   29  sometimes I do this, sometimes I do that / 어떨 때는 -고, 어떨 때는 -아/어/여요  TTMIK 174 - Level 6 Lesson 29
+175 6   30  Sentence Building Drill 8   TTMIK 175 - Level 6 Lesson 30
+176 7   1   I see that …, I just realized that … / -(는)구나 / -(는)군요  TTMIK 176 - Level 7 Lesson 1
+177 7   2   to pretend to + V / -(으/느)ㄴ 척/체 하다  TTMIK 177 - Level 7 Lesson 2
+178 7   3   to be doable/understandable/bearable / -(으)ㄹ 만하다    TTMIK 178 - Level 7 Lesson 3
+179 7   4   like + N / -같이, -처럼 TTMIK 179 - Level 7 Lesson 4
+180 7   5   as much as / -((으)ㄹ) 만큼 TTMIK 180 - Level 7 Lesson 5
+181 7   6   Word Builder 12 / 원 (院) TTMIK 181 - Level 7 Lesson 6
+182 7   7   even if …, there is no use / -아/어/여 봤자  TTMIK 182 - Level 7 Lesson 7
+183 7   8   -길래 TTMIK 183 - Level 7 Lesson 8
+184 7   9   -느라고    TTMIK 184 - Level 7 Lesson 9
+185 7   10  Sentence Building Drill 9   TTMIK 185 - Level 7 Lesson 10
+186 7   11  Making Things Happen (Causative)    TTMIK 186 - Level 7 Lesson 11
+187 7   12  -더라(고요) TTMIK 187 - Level 7 Lesson 12
+188 7   13  Word Builder 13 / 기 (機) TTMIK 188 - Level 7 Lesson 13
+189 7   14  No matter how… / 아무리 -아/어/여도    TTMIK 189 - Level 7 Lesson 14
+190 7   15  What was it again? / 뭐더라?, 뭐였죠? TTMIK 190 - Level 7 Lesson 15
+191 7   16  I said … / -다니까(요), -라니까(요) TTMIK 191 - Level 7 Lesson 16
+192 7   17  They say …/-(느)ㄴ대요/-(이)래요   TTMIK 192 - Level 7 Lesson 17
+193 7   18  They say … / -(느)ㄴ다던데요/-(이)라던데요 TTMIK 193 - Level 7 Lesson 18
+194 7   19  Making reported questions / -냐고 TTMIK 194 - Level 7 Lesson 19
+195 7   20  Sentence Building Drill 10  TTMIK 195 - Level 7 Lesson 20
+196 7   21  Didn’t you hear him say … / -(ㄴ/는)다잖아요/-라잖아요    TTMIK 196 - Level 7 Lesson 21
+197 7   22  Word Builder 14 / 정 (定) TTMIK 197 - Level 7 Lesson 22
+198 7   23  no matter whether you do it or not / -(으)나마나    TTMIK 198 - Level 7 Lesson 23
+199 7   24  Passive Voice + -어 있다 / To have been put into a certain state   TTMIK 199 - Level 7 Lesson 24
+200 7   25  to be bound to + V / -게 되어 있다   TTMIK 200 - Level 7 Lesson 25
+201 7   26  on top of …, in addition to … / -(으/느)ㄴ 데다가 TTMIK 201 - Level 7 Lesson 26
+202 7   27  As long as / -(느)ㄴ 한, -기만 하면    TTMIK 202 - Level 7 Lesson 27
+203 7   28  the thing that is called + Verb / -(ㄴ/는)다는 것    TTMIK 203 - Level 7 Lesson 28
+204 7   29  so that …, to the point where … / -도록   TTMIK 204 - Level 7 Lesson 29
+205 7   30  Sentence Building Drill 11  TTMIK 205 - Level 7 Lesson 30
+206 8   1   Advanced Idiomatic Expressions / 눈 (eye) – Part 1/2 TTMIK 206 - Level 8 Lesson 1
+207 8   2   Advanced Idiomatic Expressions / 눈 (eye) – Part 2/2 TTMIK 207 - Level 8 Lesson 2
+208 8   3   right after + V-ing / -기가 무섭게, -기가 바쁘게  TTMIK 208 - Level 8 Lesson 3
+209 8   4   N + that (someone) used to + V / -던 TTMIK 209 - Level 8 Lesson 4
+210 8   5   Advanced Situational Expressions: Refusing in Korean    TTMIK 210 - Level 8 Lesson 5
+211 8   6   it means … / -(ㄴ/는)다는 뜻이에요  TTMIK 211 - Level 8 Lesson 6
+212 8   7   Word Builder 15 / 점 (點) TTMIK 212 - Level 8 Lesson 7
+213 8   8   I hope …, I wish … / -(으)면 좋겠어요 TTMIK 213 - Level 8 Lesson 8
+214 8   9   Past Tense (Various Types) / 과거시제 총정리   TTMIK 214 - Level 8 Lesson 9
+215 8   10  Advanced Idiomatic Expressions – 귀 (ear)    TTMIK 215 - Level 8 Lesson 10
+216 8   11  Sentence Building Drill 12  TTMIK 216 - Level 8 Lesson 11
+217 8   12  Present Tense (Various Types) / 현재시제 총정리    TTMIK 217 - Level 8 Lesson 12
+218 8   13  Word Builder 16 / 주 (主) TTMIK 218 - Level 8 Lesson 13
+219 8   14  Advanced Situational Expressions: Agreeing  TTMIK 219 - Level 8 Lesson 14
+220 8   15  Future Tense (Various Types) / 미래시제 총정리 TTMIK 220 - Level 8 Lesson 15
+221 8   16  Advanced Idiomatic Expressions – 가슴 (chest, heart, breast)  TTMIK 221 - Level 8 Lesson 16
+222 8   17  If only it’s not … / -만 아니면 TTMIK 222 - Level 8 Lesson 17
+223 8   18  in the same way that …, just like someone did … / -(으)ㄴ 대로  TTMIK 223 - Level 8 Lesson 18
+224 8   19  even if I would have to, even if that means I have to / -는 한이 있더라도  TTMIK 224 - Level 8 Lesson 19
+225 8   20  Sentence Building Drill 13  TTMIK 225 - Level 8 Lesson 20
+226 8   21  Advanced Idiomatic Expressions – 머리 (head, hair)    TTMIK 226 - Level 8 Lesson 21
+227 8   22  Word Builder 17 / 상 (上) TTMIK 227 - Level 8 Lesson 22
+228 8   23  Advanced Situational Expressions: Making Suggestions in Korean  TTMIK 228 - Level 8 Lesson 23
+229 8   24  it is just that …, I only … / -(으)ㄹ 따름이다    TTMIK 229 - Level 8 Lesson 24
+230 8   25  Advanced Situational Expressions: Defending in Korean   TTMIK 230 - Level 8 Lesson 25
+231 8   26  Advanced Idiomatic Expressions – 몸 (body)   TTMIK 231 - Level 8 Lesson 26
+232 8   27  Advanced Situational Expressions: Complimenting in Korean   TTMIK 232 - Level 8 Lesson 27
+233 8   28  despite, in spite of / -에도 불구하고 TTMIK 233 - Level 8 Lesson 28
+234 8   29  Advanced Situational Expressions: When You Feel Happy   TTMIK 234 - Level 8 Lesson 29
+235 8   30  Sentence Building Drill 14  TTMIK 235 - Level 8 Lesson 30
+236 9   1   Advanced Idiomatic Expressions / 손 (Hand)   TTMIK 236 - Level 9 Lesson 1
+237 9   2   -아/어/여 버리다  TTMIK 237 - Level 9 Lesson 2
+238 9   3   Advanced Situational Expressions: When You Are Unhappy  TTMIK 238 - Level 9 Lesson 3
+239 9   4   -고 말다   TTMIK 239 - Level 9 Lesson 4
+240 9   5   Advanced Situational Expressions: When you are worried  TTMIK 240 - Level 9 Lesson 5
+241 9   6   Advanced Idiomatic Expressions – 발 (foot)   TTMIK 241 - Level 9 Lesson 6
+242 9   7   Word Builder 18 / 비 (非) TTMIK 242 - Level 9 Lesson 7
+243 9   8   Advanced Situational Expressions: Asking a favor    TTMIK 243 - Level 9 Lesson 8
+244 9   9   -(으)ㅁ   TTMIK 244 - Level 9 Lesson 9
+245 9   10  Sentence Building Drill 15  TTMIK 245 - Level 9 Lesson 10
+246 9   11  Advanced Idiomatic Expressions – 마음 (mind, heart)   TTMIK 246 - Level 9 Lesson 11
+247 9   12  -아/어/여 보이다  TTMIK 247 - Level 9 Lesson 12
+248 9   13  Word Builder 19 / 신 (新) TTMIK 248 - Level 9 Lesson 13
+249 9   14  Advanced Situational Expressions: 후회할 때 TTMIK 249 - Level 9 Lesson 14
+250 9   15  Advanced Idiomatic Expressions – 기분 (feeling)   TTMIK 250 - Level 9 Lesson 15
+251 9   16  -(으)ㄹ 테니(까) TTMIK 251 - Level 9 Lesson 16
+252 9   17  -(으/느)ㄴ 이상  TTMIK 252 - Level 9 Lesson 17
+253 9   18  -(으)ㄹ까 보다   TTMIK 253 - Level 9 Lesson 18
+254 9   19  Advanced Situational Expressions: 오랜만에 만났을 때    TTMIK 254 - Level 9 Lesson 19
+255 9   20  Sentence Building Drill 16  TTMIK 255 - Level 9 Lesson 20
+256 9   21  Advanced Idiomatic Expressions – 생각 (thought, idea) TTMIK 256 - Level 9 Lesson 21
+257 9   22  Word builder 20 / 시 (示, 視)  TTMIK 257 - Level 9 Lesson 22
+258 9   23  -(으)면서  TTMIK 258 - Level 9 Lesson 23
+259 9   24  -(ㄴ/는)다면서(요), -(이)라면서(요)    TTMIK 259 - Level 9 Lesson 24
+260 9   25  Advanced Situational Expressions: 길을 물어볼 때  TTMIK 260 - Level 9 Lesson 25
+261 9   26  Advanced Idiomatic Expressions – 시간 (time)  TTMIK 261 - Level 9 Lesson 26
+262 9   27  -더니 TTMIK 262 - Level 9 Lesson 27
+263 9   28  -(으)ㄹ 바에    TTMIK 263 - Level 9 Lesson 28
+264 9   29  Advanced Situational Expressions: 차가 막힐 때   TTMIK 264 - Level 9 Lesson 29
+265 9   30  Sentence Building Drill 17  TTMIK 265 - Level 9 Lesson 30
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;You might wonder why this is so helpful to me. But that's something for another post.&lt;/p&gt;
+&lt;h3&gt;Python code&lt;/h3&gt;
+&lt;p&gt;Simply save the script below to a file and run it with python.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;os&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;requests&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;bs4&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;BeautifulSoup&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;codecs&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;get_lesson_info&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;file_nr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# Find the seperator in the title first, as TTMIK is not consistent with it&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;title&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;find&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;h1&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;class_&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;entry-title&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;string&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;title&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;string&lt;/span&gt;
+        &lt;span class="n"&gt;splitter&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&amp;#39;&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;string&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;/&amp;#39;&lt;/span&gt; &lt;span class="ow"&gt;or&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;â€“&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="n"&gt;splitter&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39; &amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39; &amp;#39;&lt;/span&gt;
+                &lt;span class="k"&gt;break&lt;/span&gt;
+    &lt;span class="c1"&gt;# Split title into subcomponents&lt;/span&gt;
+    &lt;span class="n"&gt;strings&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;string&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;split&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;splitter&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="n"&gt;lvl_lssn&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;strings&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;TTMIK &amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;split&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39; &amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# collect data in the list.&lt;/span&gt;
+    &lt;span class="c1"&gt;# list = [nr, lvl, lssn, ...]&lt;/span&gt;
+    &lt;span class="n"&gt;strings&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;file_nr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;lvl_lssn&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;],&lt;/span&gt; &lt;span class="n"&gt;lvl_lssn&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;strings&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;:]&lt;/span&gt;
+
+    &lt;span class="n"&gt;strings&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;strings&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="c1"&gt;#print(strings)&lt;/span&gt;
+    &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="n"&gt;codecs&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;./download/lesson_list.txt&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;a&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;utf-8&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;my_file&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;  &lt;span class="c1"&gt;# better not shadow Python&amp;#39;s built-in file&lt;/span&gt;
+        &lt;span class="n"&gt;my_file&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="se"&gt;\t&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;([&lt;/span&gt;&lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;strings&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="se"&gt;\r\n&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;get_lesson&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;download&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;findAll&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;div&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;class_&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;download&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;&lt;span class="mi"&gt;3&lt;/span&gt;&lt;span class="p"&gt;]:&lt;/span&gt;
+        &lt;span class="n"&gt;url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;download&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;href&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;pdf&amp;#39;&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;filetype&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;pdf&amp;#39;&lt;/span&gt;
+        &lt;span class="k"&gt;elif&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;mp3&amp;#39;&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;filetype&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;mp3&amp;#39;&lt;/span&gt;
+
+        &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="nb"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;download/&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filetype&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;xb&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;out_file&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="nb"&gt;file&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;requests&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;content&lt;/span&gt;
+            &lt;span class="n"&gt;out_file&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;file&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;del&lt;/span&gt; &lt;span class="nb"&gt;file&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&amp;gt;&amp;gt; Succesfully saved &amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filetype&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;get_level&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lvl_nr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="n"&gt;file_nr&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;exists&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;download&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;makedirs&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;download&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;lssn_nr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="c1"&gt;# login&lt;/span&gt;
+    &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="n"&gt;requests&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;Session&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="c1"&gt;# get HTML&lt;/span&gt;
+        &lt;span class="n"&gt;url_prefix&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;http://www.talktomeinkorean.com/category/lessons/level-&amp;#39;&lt;/span&gt;
+        &lt;span class="n"&gt;rc&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;url_prefix&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lvl_nr&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="n"&gt;rc&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="c1"&gt;# parse it&lt;/span&gt;
+            &lt;span class="n"&gt;pool&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;BeautifulSoup&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;rc&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;content&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;lesson&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;pool&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;findAll&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;article&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;class_&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;category-lessons&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;lesson&amp;#39;&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;header&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;a&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;contents&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;lower&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+                    &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;jump&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                    &lt;span class="k"&gt;continue&lt;/span&gt;
+                &lt;span class="n"&gt;filename&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;TTMIK {:03d} - Level {} Lesson {}&amp;#39;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;file_nr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;lvl_nr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;lssn_nr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="se"&gt;\n&lt;/span&gt;&lt;span class="s1"&gt; Attempting to grab &amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="n"&gt;get_lesson_info&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;file_nr&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="n"&gt;get_lesson&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;lesson&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="n"&gt;lssn_nr&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+                &lt;span class="n"&gt;file_nr&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;pool&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;find&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;a&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;class_&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;next&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+                &lt;span class="n"&gt;rc&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;s&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pool&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;find&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;a&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;class_&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;next&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)[&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;href&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;])&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="n"&gt;rc&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="bp"&gt;False&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;file_nr&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;get_levels&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+    &lt;span class="n"&gt;file_nr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="mi"&gt;10&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;file_nr&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;get_level&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;&lt;span class="n"&gt;file_nr&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;__name__&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;__main__&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;get_levels&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Thu, 26 May 2016 20:25:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-05-26:post/scraping-media-from-TTMIK.html</guid><category>Korean</category><category>web</category><category>scraping</category><category>Python</category></item><item><title>Scraping korean audio fragments for Anki cards</title><link>https://blog.laurens.xyz/post/korean-audio-scraping-for-anki.html</link><description>&lt;p&gt;Besides programming, I am also quite fond of the Korean language. One of the apps I
+use to study korean is &lt;a href="www.ankisrs.net"&gt;Anki&lt;/a&gt;. Anki is a program that enables people
+to remember information efficiently using a spaced repetition algorithm. Anki is definitely
+not a sexy app by any means, especially compared to the webbased &lt;a href="www.memrise.com"&gt;Memrise&lt;/a&gt;,
+but it provides a huge amount of control for the end-user. I have come to love Anki for
+this very reason.&lt;/p&gt;
+&lt;p&gt;Anki also provides an easy distribution system where people can share their &lt;em&gt;decks&lt;/em&gt;. If there
+is any language and language course that you are taking, there is probably someone out
+there who did it before you and shared an Anki deck for it. Finding quality decks however is
+rather hard. Luckily, for the Korean language I found an excellent &lt;a href="https://ankiweb.net/shared/info/4066961604"&gt;Korean vocabulary deck
+by Evita&lt;/a&gt;. For what it's worth, I like to
+give credits to her for making my studies so much easier. The deck contains thousands of the
+most common words in decreasing order. There is a decent amount of sounds added to,
+which really helps with getting the pronunciation right. Unfortunately, too often I found
+that sounds are missing. I really wanted to have a more complete set of sound fragments to
+improve my studies so decided to write a little script in Python to do this for me.
+I will briefly guide you through the steps that are needed to run this script.&lt;/p&gt;
+&lt;h1&gt;Scraping sound fragments and adding it to your deck&lt;/h1&gt;
+&lt;p&gt;First, obtain the &lt;a href="https://ankiweb.net/shared/info/4066961604"&gt;Korean vocabulary deck by Evita&lt;/a&gt; to operate on.
+&lt;strong&gt;If you already have made progress in this deck and do not want to lose it&lt;/strong&gt;,
+it is also possible to export this deck from your own Anki environment. Make sure to include
+the progress whilst exporting the &lt;code&gt;.apkg&lt;/code&gt; file. Copy this file to a empty directory,
+for example in &lt;code&gt;C:\tmp\&lt;/code&gt;, and rename it to &lt;code&gt;in.apkg&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The python 3 script at the bottom of this page will scrape the dictionary pages of
+&lt;a href="www.naver.com"&gt;Naver&lt;/a&gt; (preferred) or &lt;a href="www.daum.net"&gt;Daum&lt;/a&gt;. Put this script in the working directory, in my case &lt;code&gt;C:\tmp\script.py&lt;/code&gt;.
+Then open a command window in that folder (&lt;code&gt;shift&lt;/code&gt; + &lt;code&gt;right click&lt;/code&gt;, then choose &lt;em&gt;open command
+window here&lt;/em&gt; if you are on Windows). The following command will start the script, make sure
+that python 3 is installed:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;python script.py
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Executing the script will take a few hours. Please wait for it to finish. But no worries,
+the script can be interrupted. Simply run the script again to continue where it left off.
+In the end, a new file should have appeared named &lt;code&gt;out.apkg&lt;/code&gt;. This is the new deck,
+containing all your originals cards and progress of you Korean vocabulary deck (by &lt;em&gt;Evita&lt;/em&gt;),
+and extended to have more sound fragments. In total, I found that this script adds &lt;strong&gt;4130 new sound fragments&lt;/strong&gt;, making a total of 4823 notes with audio and just around 90 that still lack audio. That's quite a significant improvement!&lt;/p&gt;
+&lt;h1&gt;Can't you just give me your deck?&lt;/h1&gt;
+&lt;p&gt;You clearly see the code and think, should I really run this and set this all up? No,
+I understand completely as true programmers are inherently lazy (hence they let programs
+do their work). I have simply uploaded a fresh copy of the original deck as stated above,
+on which my script did all the heavy lifting. You can simply &lt;a href="https://blog.laurens.xyz/files/Korean vocabulary by Evita and Laurens.apkg"&gt;download it here&lt;/a&gt;. I hope this extended
+deck helps you as much as it did for me!&lt;/p&gt;
+&lt;h3&gt;The python script&lt;/h3&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;sqlite3&lt;/span&gt; &lt;span class="kn"&gt;as&lt;/span&gt; &lt;span class="nn"&gt;lite&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;sys&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;requests&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;lxml&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;html&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;re&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;os&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;json&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;codecs&lt;/span&gt;
+&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;shutil&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;copyfile&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;make_archive&lt;/span&gt;
+&lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;zipfile&lt;/span&gt;
+
+&lt;span class="c1"&gt;# Do not forget to set the working directory. A sdubdirectory named &amp;#39;download&amp;#39; is expected to be in it.&lt;/span&gt;
+&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt; &lt;span class="c1"&gt;# relative path&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;loop_anki_cards&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+    &lt;span class="n"&gt;copyfile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;unzip&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s1"&gt;collection.anki2&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;collection.anki2&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;con&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;lite&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;connect&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;collection.anki2&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="n"&gt;con&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;cur&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;con&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;cursor&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="n"&gt;cur&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;execute&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;SELECT id,flds FROM notes&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="n"&gt;rows&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;cur&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;fetchall&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+
+        &lt;span class="n"&gt;current&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+        &lt;span class="n"&gt;total&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;rows&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;success&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;
+
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;row&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;rows&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;current&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+            &lt;span class="n"&gt;fields&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;row&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;split&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="se"&gt;\x1f&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="n"&gt;word&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+            &lt;span class="n"&gt;wordE&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Attempting to fetch word: {}&amp;quot;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;wordE&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;encode&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;utf-8&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)))&lt;/span&gt;
+                &lt;span class="n"&gt;fetch&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fetch_mp3&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;fetch&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                    &lt;span class="n"&gt;success&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+                    &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;[sound:_kr_voc_evita_&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;word&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.mp3]&amp;#39;&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="c1"&gt;# rename the filenames of sound fragmetns to have a prefix, to stop name collision errors with other decks&lt;/span&gt;
+                &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][:&lt;/span&gt;&lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;_kr_voc_evita_&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;][&lt;/span&gt;&lt;span class="mi"&gt;7&lt;/span&gt;&lt;span class="p"&gt;:]&lt;/span&gt;
+
+            &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="se"&gt;\x1f&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;fields&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;replace&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&amp;#39;&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;&amp;#39;&amp;#39;&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+            &lt;span class="n"&gt;cur&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;execute&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;UPDATE notes SET flds = &amp;#39;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;a&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;&amp;#39; WHERE id = &amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;row&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]))&lt;/span&gt;
+        &lt;span class="n"&gt;con&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;commit&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;success&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;fetch_mp3&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;filename&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;_kr_voc_evita_&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;word&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;.mp3&amp;#39;&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;exists&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="c1"&gt;# File already exists, so no need to download again&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&amp;gt;&amp;gt; Sound fragment already exists&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;
+
+    &lt;span class="n"&gt;url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;fetch_mp3_url&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="nb"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;xb&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;out_file&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="k"&gt;try&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="nb"&gt;file&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;requests&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;content&lt;/span&gt;
+                &lt;span class="n"&gt;out_file&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;file&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;del&lt;/span&gt; &lt;span class="nb"&gt;file&lt;/span&gt;
+                &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&amp;gt;&amp;gt; Succesfully saved word&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;
+            &lt;span class="k"&gt;except&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;None&lt;/span&gt;
+    &lt;span class="k"&gt;else&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;None&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;fetch_mp3_url&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;# First attempt naver, if unable to extract sound, try daum.&lt;/span&gt;
+    &lt;span class="n"&gt;url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;naver_url&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;daum_url&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;url&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;daum_url&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="c1"&gt;############&lt;/span&gt;
+    &lt;span class="c1"&gt;# ATTEMPT 1: Standard Daum&lt;/span&gt;
+    &lt;span class="c1"&gt;############&lt;/span&gt;
+    &lt;span class="n"&gt;pre_url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;http://alldic.daum.net/search.do?q=&amp;#39;&lt;/span&gt;
+    &lt;span class="n"&gt;post_url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;&amp;amp;dic=kor&amp;#39;&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# get html and parse it into a searchable tree for python&lt;/span&gt;
+    &lt;span class="n"&gt;page&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;requests&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pre_url&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;word&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;post_url&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;tree&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;html&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;fromstring&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;page&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;content&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# find the mp3 url file javascript code using a XPath&lt;/span&gt;
+    &lt;span class="n"&gt;string&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;xpath&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;//*[@id=&amp;quot;mArticle&amp;quot;]/div[1]/div[2]/div[2]/div[1]/div/strong/span/a/@href&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# If succesfully found, extract the sound url from the javascript event between the quotes&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;string&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;mp3&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;string&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&amp;gt;&amp;gt; Found sound fragment on Daum&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;mp3&lt;/span&gt;
+
+    &lt;span class="c1"&gt;############&lt;/span&gt;
+    &lt;span class="c1"&gt;# ATTEMPT 2: Daum forwarded&lt;/span&gt;
+    &lt;span class="c1"&gt;############&lt;/span&gt;
+    &lt;span class="c1"&gt;# If we get here, it means we couldn&amp;#39;t find the sound url because this is a redirecting page. Follow the redirect:&lt;/span&gt;
+    &lt;span class="n"&gt;regex&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;re&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;search&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;.+has_exact_redirect&amp;#39;, &amp;#39;(.*)_(.*)&amp;#39;.*&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;page&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;text&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;try&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;http://alldic.daum.net/word/view.do?wordid=&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s1"&gt;&amp;amp;q=&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s1"&gt;&amp;amp;supid=&lt;/span&gt;&lt;span class="si"&gt;%s&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;regex&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;group&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;regex&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;group&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;page&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;requests&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+        &lt;span class="n"&gt;tree&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;html&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;fromstring&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;page&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;content&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="n"&gt;string&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;xpath&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;//*[@id=&amp;quot;mSub&amp;quot;]/div/div[2]/div/em/span[2]/span/a[1]/@href&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;string&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;mp3&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;string&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+            &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&amp;gt;&amp;gt; Followed redirect and found sound fragment on Daum&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;mp3&lt;/span&gt;
+    &lt;span class="k"&gt;except&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;None&lt;/span&gt;
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;naver_url&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;url&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;http://dic.naver.com/search.nhn?dicQuery={}&amp;amp;query={}&amp;#39;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# get html and parse it into a searchable tree for python&lt;/span&gt;
+    &lt;span class="n"&gt;page&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;requests&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;get&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;url&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;tree&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;html&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;fromstring&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;page&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;content&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="c1"&gt;# find the mp3 url file javascript code using a XPath&lt;/span&gt;
+    &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="k"&gt;while&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;xpath&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;//ul[contains(@class,&amp;quot;lst_krdic&amp;quot;)]/li[&lt;/span&gt;&lt;span class="si"&gt;%d&lt;/span&gt;&lt;span class="s1"&gt;]/p&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="c1"&gt;# Check for each entry what is the precise word&lt;/span&gt;
+        &lt;span class="n"&gt;element&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;xpath&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;//ul[contains(@class,&amp;quot;lst_krdic&amp;quot;)]/li[&lt;/span&gt;&lt;span class="si"&gt;%d&lt;/span&gt;&lt;span class="s1"&gt;]/p/a/span&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;element&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;text&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;element&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;xpath&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;string()&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;text&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;word&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                &lt;span class="c1"&gt;# We got a word that matches the one we want. Try and find a audio link&lt;/span&gt;
+                &lt;span class="n"&gt;element&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;tree&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;xpath&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;//ul[contains(@class,&amp;quot;lst_krdic&amp;quot;)]/li[&lt;/span&gt;&lt;span class="si"&gt;%d&lt;/span&gt;&lt;span class="s1"&gt;]/p/a[2]/@playlist&amp;#39;&lt;/span&gt; &lt;span class="o"&gt;%&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;element&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+                    &lt;span class="c1"&gt;# we found a playlist, return the link and exit the function&lt;/span&gt;
+                    &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&amp;gt;&amp;gt; Found sound fragment on Naver&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+                    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;element&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;
+        &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="bp"&gt;None&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;edit_media_file&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+    &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="nb"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;unzip&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s1"&gt;media&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;encoding&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;utf8&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;data_file&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;data&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;json&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;load&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data_file&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;j&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="nb"&gt;range&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;Moving file...({}/{})&amp;quot;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;_kr_voc_evita_&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;)]&lt;/span&gt;
+        &lt;span class="n"&gt;copyfile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;unzip&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;j&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;len&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;listdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;download&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="o"&gt;-&lt;/span&gt;&lt;span class="mi"&gt;4&lt;/span&gt;&lt;span class="p"&gt;:]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;.mp3&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;]:&lt;/span&gt;
+        &lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;
+        &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;rename&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="nb"&gt;str&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;i&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+        &lt;span class="n"&gt;i&lt;/span&gt; &lt;span class="o"&gt;+=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;
+
+    &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="n"&gt;codecs&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;open&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s1"&gt;media&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;w+&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;encoding&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;utf8&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;outfile&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;json&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;dump&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;data&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;outfile&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;ensure_ascii&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="bp"&gt;False&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;prepare_dirs&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+    &lt;span class="c1"&gt;# make directories&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;exists&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;unzip&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;makedirs&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;unzip&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="ow"&gt;not&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;exists&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;download&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;makedirs&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;download&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+    &lt;span class="k"&gt;with&lt;/span&gt; &lt;span class="n"&gt;zipfile&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ZipFile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;in.apkg&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;r&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="k"&gt;as&lt;/span&gt; &lt;span class="n"&gt;z&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;z&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;extractall&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;unzip&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;zipdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;dirpath&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+    &lt;span class="n"&gt;ziph&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;zipfile&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ZipFile&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;filename&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;w&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;zipfile&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;ZIP_DEFLATED&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="c1"&gt;# ziph is zipfile handle&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;root&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;dirs&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;files&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;walk&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;dirpath&lt;/span&gt;&lt;span class="p"&gt;):&lt;/span&gt;
+        &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="nb"&gt;file&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;files&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+            &lt;span class="n"&gt;ziph&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;write&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;path&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;join&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;root&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;file&lt;/span&gt;&lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="nb"&gt;file&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+
+&lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="n"&gt;__name__&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;__main__&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+    &lt;span class="n"&gt;prepare_dirs&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="n"&gt;addedcount&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;loop_anki_cards&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="n"&gt;edit_media_file&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="n"&gt;zipdir&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="nb"&gt;dir&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="s2"&gt;&amp;quot;download&lt;/span&gt;&lt;span class="se"&gt;\\&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;out.apkg&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s2"&gt;&amp;quot;SUCCESFULLY ADDED {} SOUND FRAGMENTS&amp;quot;&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;format&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;addedcount&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Sun, 22 May 2016 12:44:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-05-22:post/korean-audio-scraping-for-anki.html</guid><category>Anki</category><category>Korean</category><category>web</category><category>scraping</category><category>Python</category></item><item><title>Initializing the Raspberry Pi 3 (headless)</title><link>https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3.html</link><description>&lt;p&gt;Recently I received my first Raspberry Pi 3 in an attempt to satisfy the curiousity.
+I occasionally play with projects that require jobs to be run at regular interval and
+having a low powered Raspberry Pi 3 to do this is ideal. Since I will likely mess up
+my RPi3 numerous times I would like to quickly document how I set up my RPi3 so I can
+reset my pi if need be. In this guide I will briefly explain the essential steps that are needed to get a usable RPi. In this guide I will do that completely headless, that is without any keyboard, screen or other peripherals connected to the Raspberry Pi.&lt;/p&gt;
+&lt;p&gt;First a interesting little fact that I would like to share. &lt;a href="http://tweakers.net/reviews/4443/5/raspberry-pi-3-net-iets-sneller-dan-de-oude-opgenomen-vermogen-en-warmte.html"&gt;A recent review&lt;/a&gt; shows that the RPi3 consumes 2.21 Watt in idle state and
+and maximum peaks of 3.62 Watt under stress. If we assume a generous 2.5 Watt average power consumption and 0.23€ Kwh energy price, the RPi3 costs only
+&lt;code&gt;2.5 / 1000 * 24 * 365 * 0.23 = 5.037€&lt;/code&gt; to operate full-time per year. It thus costs virtually
+nothing to run my own little RPi3 server and it is an excellent opportunity for me to
+experience and learn the ways of Linux.&lt;/p&gt;
+&lt;h1&gt;Installing the OS&lt;/h1&gt;
+&lt;p&gt;The official supported operating system for the RPi is &lt;a href="https://www.raspberrypi.org/downloads/raspbian"&gt;Raspbian&lt;/a&gt;, and comes pre-installed with plenty of software for education, programming and general use. It has Python, Scratch, Sonic Pi, Java, Mathematica and more. Since I will be running the RPi headless, I will be obtaining
+the Raspbian Jessie Lite image. This lite version of Raspbian does not include the
+components for displaying a desktop environment. Everything will be running from a
+simple terminal, which hopefully frees some much needed resources.&lt;/p&gt;
+&lt;p&gt;For Windows, the image can simply be installed to a MicroSD card (min. 2GB) using &lt;code&gt;Win32DiskImager&lt;/code&gt; (&lt;a href="http://sourceforge.net/projects/win32diskimager/"&gt;Sourceforge page&lt;/a&gt;). These directions are pretty straightforward, altough be aware that this wipes the complete SD card, so back up what you still need on the card.&lt;/p&gt;
+&lt;h1&gt;Setting up to the Raspberry Pi 3 for the first time&lt;/h1&gt;
+&lt;p&gt;After writing the image the SD card, it needs to be inserted into the RPi. Power the RPi with
+standard microUSB charger. It is wise to have a charger that provides a stable voltage and plenty of amperes. The recommended voltage is 5V (or within 10% margin) and at least 2A. Having too little power can result in an unstable pi. Now that the pi is running, we would like to contol it. To control it we have to use a SSH connection. SSH, or secure shell, is the mainstay of remote access and administration in the Linux world. Windows lacks a native SSH client for connecting to Linux machines. So if you are a Windows user like me, please grab a SSH client first, &lt;em&gt;e.g.&lt;/em&gt; &lt;a href="http://www.putty.org/"&gt;Putty&lt;/a&gt;.&lt;/p&gt;
+&lt;h2&gt;Connecting to the RPi3&lt;/h2&gt;
+&lt;p&gt;The RPi3 has onboard WiFi, but unfortunately has no ears. This makes it hard for us to tell it the correct WiFi settings. Fortunately, most people will have some LAN cable to connect the RPi for the first time and edit the relevant WiFi settings. Simply connect the RPi to a router or computer and try to discover the local IP adress of the RPi. Enter this IP adress in your SSH client, and assume the default port for SSH (port 22). The SSH terminal will ask for a user and password. The default password is &lt;code&gt;pi&lt;/code&gt; and the password is &lt;code&gt;raspberry&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;If you have no LAN cable available or you are just lazy like me, there is a workaround which I will explain in the next section that allows us to set up WiFi without the need of a LAN cable.&lt;/p&gt;
+&lt;h2&gt;Setting up WiFi&lt;/h2&gt;
+&lt;p&gt;We now must set up the RPi with the correct WiFi configuration. For this we need to edit the file &lt;code&gt;\etc\wpa_supplicant\wpa_supplicant.conf&lt;/code&gt;. If already connected to the Pi through a LAN cable, we can simply edit that file over SSH using the command&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo nano \etc\wpa_supplicant\wpa_supplicant.conf
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;If not connected yet, it is possible to edit the SD card using another Linux-operated computer or by mounting the &lt;em&gt;Ext&lt;/em&gt; filesystem on the SD card on Windows with &lt;a href="http://www.paragon-software.com/home/extfs-windows/"&gt;Pargon ExtFS for Windows&lt;/a&gt;. With the latter option, please use a proper file editor that supports LF line endings.&lt;/p&gt;
+&lt;p&gt;For each wireless network that we would like to use, add the following lines:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;network{
+  ssid=&amp;quot;Wifi name here&amp;quot;
+  psk=&amp;quot;Wifi password here&amp;quot;
+}
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now simply save the file (CRTL+X if you used the &lt;code&gt;sudo nano&lt;/code&gt; command) and restart the RPi. If set up correctly, the Raspberry Pi now connects to your wireless network! Just find the new local IP in the administrative console of your router and you can connect using a SSH client.&lt;/p&gt;
+&lt;h1&gt;Expanding the filesystem&lt;/h1&gt;
+&lt;p&gt;The usual distribution images are 2 GB. When you copy the image to a larger SD card you have a portion of that card unused. This will quickly lead to issues where you run out of space. To fix this, the default raspbian image comes with a config tool. Start this config tool with the command&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;sudo raspi-config
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;There will simply be a option &lt;code&gt;Expand Filesystem&lt;/code&gt;. Select this and reboot the Pi. Now pretty much most steps are completed that are needed to get started with the pi. Enjoy!&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Tue, 03 May 2016 20:15:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-05-03:post/Initializing-the-raspberry-pi-3.html</guid><category>Raspberry Pi 3</category><category>Settings</category></item><item><title>Building this blog</title><link>https://blog.laurens.xyz/post/building-this-blog.html</link><description>&lt;p&gt;With the creation of this site I immediately have a topic to write about. In this
+post I hope to document how to copy this static blog that is created using &lt;em&gt;Pelican&lt;/em&gt;
+and hosted on &lt;em&gt;Github Pages&lt;/em&gt;. In doing so I hope that anyone (mostly future me) can
+replicate my blog with minimal effort. The only requirements are a Python distribution with virtual environments (&lt;a href="https://www.continuum.io/downloads"&gt;Anaconda&lt;/a&gt; is assumed here), git and Windows. I assume that everybody is already familiar with the concept of a static blog.&lt;/p&gt;
+&lt;h1&gt;Obtaining the blog's requirements&lt;/h1&gt;
+&lt;p&gt;The source for this blog can be found in my &lt;a href="https://github.com/iiLaurens/blog"&gt;Github repository&lt;/a&gt;. Simply clone the contents to a local
+folder and build the minimum Python (v2.7 in this case) environment in a suitable folder, such as &lt;code&gt;venv&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;After that activate the python environment with the command &lt;code&gt;activate ./venv&lt;/code&gt; and install
+the required packages. This static blog is created using &lt;em&gt;Pelican&lt;/em&gt;.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;git clone https://github.com/iiLaurens/blog.git
+&lt;span class="nb"&gt;cd&lt;/span&gt; blog
+conda create -p venv &lt;span class="nv"&gt;python&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;2.7
+activate ./venv
+pip install -r requirements.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now we should be all set to build the actual static website!&lt;/p&gt;
+&lt;h1&gt;Building the blog using Pelican&lt;/h1&gt;
+&lt;p&gt;The way this blog works is that it takes a folder with notes (in this case Markdown files) and build a nice static blog from it. In this case, all the content is in the appropiately named &lt;code&gt;content&lt;/code&gt; folder. Make sure that the virtual python environment is still active and start building with Pelican. The first argument should be the folder that holds the content and additionally we have to supply the settings config so that the blog actually works the way I wanted it. The blog in it's entirety is build in the &lt;code&gt;output&lt;/code&gt; folder.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;pelican content -s pelicanconf.py
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Ideally, we check whether the blog displays correctly before sending it to the world. This is simply possible by starting a simple local HTTP Server in the &lt;code&gt;output&lt;/code&gt; folder. Make sure that the site url is updated accordingly in the blog's settings in &lt;code&gt;pelicanconf.py&lt;/code&gt; to, for example, &lt;code&gt;http://localhost:8000&lt;/code&gt;.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="nb"&gt;cd&lt;/span&gt; output
+python -m SimpleHTTPServer
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;If everything looks nice and peachy then revert the site url in the settings file and get ready to upload the blog!&lt;/p&gt;
+&lt;h1&gt;Uploading to Github Pages&lt;/h1&gt;
+&lt;p&gt;Before uploading, be sure that you have a Git repository on Github that is named &lt;code&gt;&amp;lt;username&amp;gt;.github.io&lt;/code&gt;. If so, simply push the output folder to this repository but start by (re)initialising a git repo in the &lt;code&gt;output&lt;/code&gt; folder.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;git init
+git add .
+git commit -m &lt;span class="s2"&gt;&amp;quot;add static blog&amp;quot;&lt;/span&gt;
+git push https://&amp;lt;username&amp;gt;:&amp;lt;password&amp;gt;@github.com/&amp;lt;username&amp;gt;/&amp;lt;username&amp;gt;.github.io.git master --force
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The reason that I apply a forcefull push here is to circumvent any problems that might arise when the repository already exists on github and is not empty.&lt;/p&gt;
+&lt;p&gt;And just like that, we have obtained a copy of the source of this blog, recreated it and uploaded it to your own Github User pages. It is recommended to keep a seperate repository with the source of the blog and update it whenever it is changed.&lt;/p&gt;</description><dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Laurens</dc:creator><pubDate>Sun, 01 May 2016 15:17:00 +0200</pubDate><guid isPermaLink="false">tag:blog.laurens.xyz,2016-05-01:post/building-this-blog.html</guid><category>Python</category><category>Pelican</category><category>Github pages</category></item></channel></rss>

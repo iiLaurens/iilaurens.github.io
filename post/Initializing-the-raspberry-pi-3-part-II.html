@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>Initializing the Raspberry Pi 3 Part II - Laurens' geeky adventures</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3-part-II.html">
+
+        <meta name="author" content="Laurens" />
+        <meta name="keywords" content="Raspberry Pi 3,Settings" />
+        <meta name="description" content="Here I will be updating some of my adventures with my RPi3. I will be pushing SSH keys for secure connecting and I will set up how to boot from USB. I also assume that we are working on bash on ubuntu for windows, which is new since the Anniversary ..." />
+
+        <meta property="og:site_name" content="Laurens' geeky adventures" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="Initializing the Raspberry Pi 3 Part II"/>
+        <meta property="og:url" content="https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3-part-II.html"/>
+        <meta property="og:description" content="Here I will be updating some of my adventures with my RPi3. I will be pushing SSH keys for secure connecting and I will set up how to boot from USB. I also assume that we are working on bash on ubuntu for windows, which is new since the Anniversary ..."/>
+        <meta property="article:published_time" content="2016-10-05" />
+            <meta property="article:section" content="2016" />
+            <meta property="article:tag" content="Raspberry Pi 3" />
+            <meta property="article:tag" content="Settings" />
+            <meta property="article:author" content="Laurens" />
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="https://blog.laurens.xyz/theme/css/bootstrap.yeti.min.css" type="text/css"/>
+    <link href="https://blog.laurens.xyz/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="https://blog.laurens.xyz/theme/css/pygments/zenburn.css" rel="stylesheet">
+    <link href="https://blog.laurens.xyz/theme/tipuesearch/tipuesearch.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://blog.laurens.xyz/theme/css/style.css" type="text/css"/>
+
+
+
+
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://blog.laurens.xyz/" class="navbar-brand">
+Laurens' geeky adventures            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li ><a href="https://blog.laurens.xyz/tags.html">Tags</a></li>
+              <li><span>
+                <form class="navbar-search" action="/search.html">
+                  <input type="text" class="search-query" placeholder="Search" name="q" id="tipue_search_input" required>
+                </form></span>
+              </li>
+              <li><a href="https://blog.laurens.xyz/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3-part-II.html"
+                       rel="bookmark"
+                       title="Permalink to Initializing the Raspberry Pi 3 Part II">
+                        Initializing the Raspberry Pi 3 Part II
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2016-10-05T20:15:00+02:00"> 05-10-2016</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="https://blog.laurens.xyz/tags/raspberry-pi-3.html">Raspberry Pi 3</a>
+        /
+	<a href="https://blog.laurens.xyz/tags/settings.html">Settings</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p>Here I will be updating some of my adventures with my RPi3. I will be pushing SSH keys for secure connecting and I will set up how to boot from USB. I also assume that we are working on <em>bash on ubuntu for windows</em>, which is new since the Anniversary update of Windows on 10. This allows me to directly connect with my Raspberry Pi without additional software for Windows PC's. However, you can use any preferred SSH client for Windows.</p>
+<h1>Programming USB boot mode</h1>
+<p>Next up is programming the Pi to boot from the USB. This is now supported in the newest releases of raspbian, but only for the Raspberry Pi 3. This special mode completely removes the need for having a SD card inserted.</p>
+<p>First, prepare the <code>/boot</code> directory with experimental boot files:</p>
+<div class="highlight"><pre><span></span># If on raspbian lite you need to install rpi-update before you can use it:
+$ sudo apt-get update; sudo apt-get install rpi-update
+$ sudo BRANCH=next rpi-update
+</pre></div>
+
+
+<p>Then enable USB boot mode with this code:</p>
+<div class="highlight"><pre><span></span>echo program_usb_boot_mode=1 | sudo tee -a /boot/config.txt
+</pre></div>
+
+
+<p>Reboot the Pi with sudo reboot, then check that the OTP has been programmed with:</p>
+<div class="highlight"><pre><span></span>$ vcgencmd otp_dump <span class="p">|</span> grep 17:
+17:3020000a
+</pre></div>
+
+
+<p>Ensure the output <code>0x3020000a</code> is correct.</p>
+<p>If you wish, you can remove the <code>program_usb_boot_mode</code> line from config.txt (make sure there is no blank line at the end) so that if you put the SD card in another Pi, it won't program USB boot mode. You can do this with <code>sudo nano /boot/config.txt</code>, for example.</p>
+<h1>Preparing the USB storage device</h1>
+<p>We will start by using Parted to create a 100MB FAT32 partition, followed by a Linux ext4 partition that will contain the Raspbian distribution. Additionally I wanted two NTFS drives myself that serve as datawarehouses and network drives for my desktop computer.</p>
+<p>First, make sure that NTFS support is installed.</p>
+<div class="highlight"><pre><span></span>sudo apt-get install ntfs-3g
+</pre></div>
+
+
+<p>Then format the USB drive to our needs.</p>
+<div class="highlight"><pre><span></span>sudo parted /dev/sda
+
+(parted) mktable msdos
+Warning: The existing disk label on /dev/sda will be destroyed and all data on this disk will be lost. Do you want to
+continue?
+Yes/No? Yes
+(parted) mkpart primary fat32 0% 100M
+(parted) mkpart primary ext4 100M 10G
+(parted) mkpart primary ntfs 10G 610G
+(parted) mkpart primary ntfs 610G 100%
+(parted) print
+Model: SAMSUNG HD154UI (scsi)
+Disk /dev/sda: 1500GB
+Sector size (logical/physical): 512B/512B
+Partition Table: msdos
+Disk Flags:
+
+Number  Start   End     Size    Type     File system  Flags
+ 1      1049kB  99.6MB  98.6MB  primary  fat32        lba
+ 2      99.6MB  10.0GB  9901MB  primary  ext4         lba
+ 3      10.0GB  610GB   600GB   primary  ntfs         lba
+ 4      610GB   1500GB  890GB   primary  ntfs         lba
+</pre></div>
+
+
+<p>Your parted print output should look similar to the one above.</p>
+<p>Create the boot and root file systems:</p>
+<div class="highlight"><pre><span></span>sudo mkfs.vfat -n BOOT -F 32 /dev/sda1
+sudo mkfs.ext4 /dev/sda2
+sudo mkfs.ntfs /dev/sda3 -f
+sudo mkfs.ntfs /dev/sda4 -f
+</pre></div>
+
+
+<p>Mount the target file system and copy the running raspbian system to it:</p>
+<div class="highlight"><pre><span></span>sudo mkdir /mnt/target
+sudo mount /dev/sda2 /mnt/target/
+sudo mkdir /mnt/target/boot
+sudo mount /dev/sda1 /mnt/target/boot/
+sudo apt-get update; sudo apt-get install rsync
+sudo rsync -ax --progress / /boot /mnt/target
+</pre></div>
+
+
+<p>Regenerate ssh host keys:</p>
+<div class="highlight"><pre><span></span>cd /mnt/target
+sudo mount --bind /dev dev
+sudo mount --bind /sys sys
+sudo mount --bind /proc proc
+sudo chroot /mnt/target
+rm /etc/ssh/ssh_host*
+dpkg-reconfigure openssh-server
+exit
+sudo umount dev
+sudo umount sys
+sudo umount proc
+</pre></div>
+
+
+<p>Edit /boot/cmdline.txt so that it uses the USB storage device as the root file system instead of the SD card.</p>
+<div class="highlight"><pre><span></span>sudo sed -i &quot;s,root=/dev/mmcblk0p2,root=/dev/sda2,&quot; /mnt/target/boot/cmdline.txt
+</pre></div>
+
+
+<p>The same needs to be done for fstab:</p>
+<div class="highlight"><pre><span></span>sudo sed -i &quot;s,/dev/mmcblk0p,/dev/sda,&quot; /mnt/target/etc/fstab
+</pre></div>
+
+
+<p>Finally, unmount the target file systems, and power the Pi off.</p>
+<div class="highlight"><pre><span></span>cd ~
+sudo umount /mnt/target/boot
+sudo umount /mnt/target
+sudo poweroff
+</pre></div>
+
+
+<p>Disconnect the power supply from the Pi, remove the SD card, and reconnect the power supply. If all has gone well, the Pi should begin to boot after a few seconds.</p>
+<h1>Passwordless access using SSH keys</h1>
+<p>If your Pi does not have an .ssh directory you will need to set one up so that you can copy the key from your computer.</p>
+<div class="highlight"><pre><span></span>cd ~
+install -d -m 700 ~/.ssh
+</pre></div>
+
+
+<p>To copy your public key to your Raspberry Pi, use the following command to append the public key to your authorized_keys file on the Pi, sending it over SSH. First exit the pi using <code>logout</code>. Then from your linux (or ubuntu for windows) distribution transfer the keys:</p>
+<div class="highlight"><pre><span></span>cat ~/.ssh/id_rsa.pub | ssh &lt;username&gt;@&lt;address of RPi&gt; &quot;cat &gt;&gt; .ssh/authorized_keys&quot;
+</pre></div>
+
+
+<p>Now if you have the correct <code>id_rsa</code> in your (non-RPi) OS in the <code>.ssh</code> folder, then logging into the RPi should not ask for a password again!</p>
+<p>Disallowing password login. To disallow password login we need to edit the ssh config found in /etc/ssh/sshd_config. Do do this we can ssh into the Pi. Once at the prompt we can enter the following:</p>
+<div class="highlight"><pre><span></span>sudo nano /etc/ssh/sshd_config
+</pre></div>
+
+
+<p>scroll down to the section that says <code>#PasswordAuthentication yes</code> and uncomment it to no. Save it using <code>CTRL+X</code>.</p>
+<p>From now on it is only possible to login on the RPi using the correct SSH keys!</p>
+            </div>
+            <!-- /.entry-content -->
+    <hr/>
+    <section class="comments" id="comments">
+        <h2>Comments</h2>
+
+        <div id="disqus_thread"></div>
+        <script type="text/javascript">
+            /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+            var disqus_shortname = 'iilaurens'; // required: replace example with your forum shortname
+
+                    var disqus_identifier = 'Initializing-the-raspberry-pi-3-part-II';
+                var disqus_url = 'https://blog.laurens.xyz/post/Initializing-the-raspberry-pi-3-part-II.html';
+
+            var disqus_config = function () {
+                this.language = "en";
+            };
+
+            /* * * DON'T EDIT BELOW THIS LINE * * */
+            (function () {
+                var dsq = document.createElement('script');
+                dsq.type = 'text/javascript';
+                dsq.async = true;
+                dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+        </script>
+        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+            Disqus.</a></noscript>
+        <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    </section>
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">&copy; 2017 Laurens
+            &middot; Powered by <a href="https://github.com/getpelican/pelican-themes/tree/master/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="https://blog.laurens.xyz/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="https://blog.laurens.xyz/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="https://blog.laurens.xyz/theme/js/respond.min.js"></script>
+
+    <!-- Disqus -->
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = 'iilaurens'; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function () {
+            var s = document.createElement('script');
+            s.async = true;
+            s.type = 'text/javascript';
+            s.src = '//' + disqus_shortname + '.disqus.com/count.js';
+            (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+        }());
+    </script>
+    <!-- End Disqus Code -->
+    <!-- Google Analytics -->
+    <script type="text/javascript">
+
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-77190701-1']);
+        _gaq.push(['_trackPageview']);
+
+        (function () {
+            var ga = document.createElement('script');
+            ga.type = 'text/javascript';
+            ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+    <!-- End Google Analytics Code -->
+
+</body>
+</html>

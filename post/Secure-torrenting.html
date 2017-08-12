@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en" prefix="og: http://ogp.me/ns# fb: https://www.facebook.com/2008/fbml">
+<head>
+    <title>A secure torrent solution for Raspbian, Debian or Ubuntu - Laurens' geeky adventures</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<link rel="canonical" href="https://blog.laurens.xyz/post/Secure-torrenting.html">
+
+        <meta name="author" content="Laurens" />
+        <meta name="keywords" content="Raspberry Pi 3,Settings" />
+        <meta name="description" content="Edit June 2017: I once wrote this blog to turn my raspberry pi in a do-it-all home server. One of the tasks I needed it to do was to use secure and undetectable torrent connections for &#39;reasons&#39;. This blogpost shows actually how to set this up for a raspberry pi ..." />
+
+        <meta property="og:site_name" content="Laurens' geeky adventures" />
+        <meta property="og:type" content="article"/>
+        <meta property="og:title" content="A secure torrent solution for Raspbian, Debian or Ubuntu"/>
+        <meta property="og:url" content="https://blog.laurens.xyz/post/Secure-torrenting.html"/>
+        <meta property="og:description" content="Edit June 2017: I once wrote this blog to turn my raspberry pi in a do-it-all home server. One of the tasks I needed it to do was to use secure and undetectable torrent connections for &#39;reasons&#39;. This blogpost shows actually how to set this up for a raspberry pi ..."/>
+        <meta property="article:published_time" content="2016-11-15" />
+            <meta property="article:section" content="2016" />
+            <meta property="article:tag" content="Raspberry Pi 3" />
+            <meta property="article:tag" content="Settings" />
+            <meta property="article:author" content="Laurens" />
+
+
+    <!-- Bootstrap -->
+        <link rel="stylesheet" href="https://blog.laurens.xyz/theme/css/bootstrap.yeti.min.css" type="text/css"/>
+    <link href="https://blog.laurens.xyz/theme/css/font-awesome.min.css" rel="stylesheet">
+
+    <link href="https://blog.laurens.xyz/theme/css/pygments/zenburn.css" rel="stylesheet">
+    <link href="https://blog.laurens.xyz/theme/tipuesearch/tipuesearch.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://blog.laurens.xyz/theme/css/style.css" type="text/css"/>
+
+
+
+
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-fixed-top" role="navigation">
+	<div class="container">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a href="https://blog.laurens.xyz/" class="navbar-brand">
+Laurens' geeky adventures            </a>
+        </div>
+        <div class="collapse navbar-collapse navbar-ex1-collapse">
+            <ul class="nav navbar-nav">
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              <li ><a href="https://blog.laurens.xyz/tags.html">Tags</a></li>
+              <li><span>
+                <form class="navbar-search" action="/search.html">
+                  <input type="text" class="search-query" placeholder="Search" name="q" id="tipue_search_input" required>
+                </form></span>
+              </li>
+              <li><a href="https://blog.laurens.xyz/archives.html"><i class="fa fa-th-list"></i><span class="icon-label">Archives</span></a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<!-- Banner -->
+<!-- End Banner -->
+<div class="container">
+    <div class="row">
+        <div class="col-lg-12">
+    <section id="content">
+        <article>
+            <header class="page-header">
+                <h1>
+                    <a href="https://blog.laurens.xyz/post/Secure-torrenting.html"
+                       rel="bookmark"
+                       title="Permalink to A secure torrent solution for Raspbian, Debian or Ubuntu">
+                        A secure torrent solution for Raspbian, Debian or Ubuntu
+                    </a>
+                </h1>
+            </header>
+            <div class="entry-content">
+                <div class="panel">
+                    <div class="panel-body">
+<footer class="post-info">
+    <span class="label label-default">Date</span>
+    <span class="published">
+        <i class="fa fa-calendar"></i><time datetime="2016-11-15T23:10:00+01:00"> 15-11-2016</time>
+    </span>
+
+
+
+
+
+<span class="label label-default">Tags</span>
+	<a href="https://blog.laurens.xyz/tags/raspberry-pi-3.html">Raspberry Pi 3</a>
+        /
+	<a href="https://blog.laurens.xyz/tags/settings.html">Settings</a>
+    
+</footer><!-- /.post-info -->                    </div>
+                </div>
+                <p><strong>Edit June 2017:</strong>
+<em>I once wrote this blog to turn my raspberry pi in a do-it-all home server. One of the tasks I needed it to do was to use secure and undetectable torrent connections for 'reasons'. This blogpost shows actually how to set this up for a raspberry pi. It allows a VPN to be run in the background without pulling all the data traffic on the little machine. It only forwarded torrent traffic (or any traffic by an arbitrary but prespecified user). These days however I have moved to a more powerfull machine which is able to run an Ubuntu desktop. Unfortunately these guidelines did not work immediately for an Ubuntu setup. Having investigated the issue I have now added additional descriptions for this setup to work on an Ubuntu (version 16 or higher) machine. These descriptions can be found at the bottom of this page.</em></p>
+<p>I will be discussing some of the applications I have been using on my raspberry pi to turn it into a low power torrent that can always stay powered on. It serves as a torrent box with <em>Deluge</em>, which I can control remotely from one of my desktop computers using deluge's <em>thin client</em>. I will also show how to connect deluge through a secure VPN tunnel such that all torrenting traffic is safely encrypted whilst the rest of the Raspberry Pi's traffic can travel through regular channels.</p>
+<h1>Confuguring OpenVPN</h1>
+<p>Start with installing openVPN</p>
+<div class="highlight"><pre><span></span>sudo apt-get install openvpn
+</pre></div>
+
+
+<p>To get the client up and running, I expect that you already are subscribed to some VPN service provider. Most providers have configuratoin files available that are ready to be used with OpenVPN. Obtain the download URL of these settings from your provider and put it in <code>/etc/openvpn</code>:</p>
+<div class="highlight"><pre><span></span>cd /etc/openvpn
+sudo wget &lt;url here&gt;
+</pre></div>
+
+
+<p>My service provider happened to have multiple configuration available for several VPN servers. These files are all contained in a zip, hence I unzip them. Notice that I also rename the files to a <code>.conf</code> extension as mine originally came in a <code>.ovpn</code> format. The rename command is thus optional.</p>
+<div class="highlight"><pre><span></span>sudo unzip &lt;filename&gt;
+sudo rename &quot;s/.ovpn/.conf/&quot; *.ovpn
+</pre></div>
+
+
+<p>Acces to VPN servers is often password protect. The configuration files generally do not include your personal password and username so we have to add them ourselves. Drop your username and password into a file named <code>auth.txt</code>:</p>
+<div class="highlight"><pre><span></span>sudo cat &lt;&lt; EOF | sudo tee auth.txt
+username
+password
+EOF
+</pre></div>
+
+
+<p>Now we have edit our VPN's configuration files to include a reference to our authorization file.</p>
+<div class="highlight"><pre><span></span>sudo sed -i &#39;s|auth-user-pass|auth-user-pass \/etc\/openvpn\/auth.txt|&#39; *.conf
+</pre></div>
+
+
+<p>The above command replaces every occurance of <code>auth-user-pass</code> with <code>auth-user-pass auth.txt</code>. If your configuration file did not include a <code>auth-user-pass</code> line then you have to append it yourself. Finally see if is working correctly using a</p>
+<div class="highlight"><pre><span></span>curl https://jsonip.com
+sudo openvpn --daemon --config /etc/openvpn/&lt;file&gt;.conf
+curl https://jsonip.com
+</pre></div>
+
+
+<p>Note that the curl commands should return ip addresses. It should show two different IP addresses before and after starting OpenVPN. If this works, we are all set!</p>
+<h1>Installing Deluge</h1>
+<p>To install deluge, start with installing the <code>deluged</code> package, which is the daemon package of deluge (so without the front-end as we are running it from a terminal).</p>
+<div class="highlight"><pre><span></span>sudo apt-get install deluged
+sudo apt-get install deluge-console
+</pre></div>
+
+
+<p>First of all, we want deluge to operate from a seperate user so that later we can redirect it's traffic by user ID. We start by creating a new user named <code>deluge</code>:</p>
+<div class="highlight"><pre><span></span>sudo adduser deluge
+</pre></div>
+
+
+<p>Next, we have to start deluge once under the deluge username to create all the configuration files. The -u after the sudo command tells our Pi to run this operations as the <code>deluge</code> user. (for an Ubuntu setup, one might have to add the -H flag before the -u flag to prevent the sudo command from defaulting to the root user's home folder)</p>
+<div class="highlight"><pre><span></span>sudo -u deluge deluged
+sudo pkill deluged
+</pre></div>
+
+
+<p>Now we can create a custom username and password so we control the deluge app remotely.</p>
+<div class="highlight"><pre><span></span>sudo nano /home/deluge/.config/deluge/auth
+</pre></div>
+
+
+<p>Once inside nano, you’ll need to add a line to the configuration file in the following format:</p>
+<div class="highlight"><pre><span></span><span class="n">user</span><span class="o">:</span><span class="n">password</span><span class="o">:</span><span class="mi">10</span>
+</pre></div>
+
+
+<p>The final number 10 defines the rights of the user (in which case 10 implies the full-access/administrative level). When you’re done editing, hit CTRL+X and save your changes. Once you’ve saved them, start up the daemon again and enter the deluge-console:</p>
+<div class="highlight"><pre><span></span>sudo -u deluge deluged
+sudo -u deluge deluge-console
+</pre></div>
+
+
+<p>Once you’re inside the console, we need to make a quick configuration change to enable remote access. Enter the following:</p>
+<div class="highlight"><pre><span></span>config -s allow_remote True
+exit
+</pre></div>
+
+
+<p>Now it’s time to kill the daemon and restart it one more time so that the config changes take effect:</p>
+<div class="highlight"><pre><span></span>sudo pkill deluged
+sudo -u deluge deluged
+</pre></div>
+
+
+<p>Now deluge should be ready to accept connections from the <em>Thin Client</em>! To connect, simply enter the ip address of you Raspberry pi and the credentials you created earlier.</p>
+<h1>Restrict torrenting traffic to use only the VPN connection</h1>
+<p>What OpenVPN does by default is pull all traffic over the tunnel it creates. I only wanted my torrent traffic to use the VPN. Now this is where things took me a long time to figure out. Networking is just pretty confusing stuff for someone that never really bothered with it. However, I was able to solve it in the following way:</p>
+<p>First, we move to the openvpn directory again and make sure openvpn and deluged are not running.</p>
+<div class="highlight"><pre><span></span>cd /etc/openvpn
+sudo pkill deluged
+sudo pkill openvpn
+</pre></div>
+
+
+<p>First we need to allow OpenVPN to change our DNS servers. Now we need to change the configuration file again so we stop openvpn from pulling all traffic to the tunnel.</p>
+<div class="highlight"><pre><span></span>sudo sed -i &#39;s|client|client\nscript-security 2\nroute-noexec\nroute-up \/etc\/openvpn\/route-up.sh|&#39; *.conf
+</pre></div>
+
+
+<p>But this also means we have to add the correct routes for our internet packages as well. For this, we can create the <code>route-up.sh</code> file. Create the file using</p>
+<div class="highlight"><pre><span></span>sudo nano route-up.sh
+</pre></div>
+
+
+<p>Paste the following contents and save with <code>ctrl+x</code>. Please note that I assume that the default internet uses the <code>eth0</code> interface. If it is not, then you should replace each occurence with your specific interface (for example <code>wlan0</code>).</p>
+<table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+
+<span class="nb">echo</span> <span class="s2">&quot;Delete any pre-existing rules&quot;</span>
+<span class="c1"># It&#39;s okay if we get errors if the rules were not found.</span>
+<span class="c1"># The end goal is to not have these rules so it&#39;s fine.</span>
+ip route flush table 111
+iptables -t mangle -D OUTPUT -m owner --uid deluge -j MARK --set-mark 1
+iptables -t nat -D POSTROUTING -m mark --mark <span class="m">1</span> -j MASQUERADE
+ip rule del fwmark 0x1 table 111
+
+<span class="nb">echo</span> <span class="s2">&quot;Applying routes&quot;</span>
+iptables -t mangle -A OUTPUT -m owner --uid deluge -j MARK --set-mark 1
+iptables -t nat -A POSTROUTING -m mark --mark <span class="m">1</span> -j MASQUERADE
+ip rule add fwmark 0x1 table 111
+
+ip route add 0.0.0.0/1 via <span class="nv">$route_vpn_gateway</span> dev <span class="nv">$dev</span> table 111
+ip route add 128.0.0.0/1 via <span class="nv">$route_vpn_gateway</span> dev <span class="nv">$dev</span> table 111
+ip route add <span class="k">$(</span>ip route <span class="p">|</span> grep -iP <span class="s1">&#39;eth0.+ src&#39;</span><span class="k">)</span> table 111
+ip route add blackhole default table 111
+ip route flush cache
+</pre></div>
+</td></tr></table>
+
+<p>The script does a couple of things. First, it deletes any pre-existing rules that might be created if you restart OpenVPN in the future. After that, I add multiple filters and routes. First I mark all packets that originate from the <code>deluge</code> user, which is who will be running the torrent daemon. Then, we tell the kernel to use a different routing table if a outward destined packet is marked. I finish by generating the routes for table 111. The first two <code>ip route add</code> commands just define the tunnel to our VPN server. The third makes sure that everything that is destined for the local network does not go through the tunnel but over the local network. Finally, a black hole is added. If the connection with the VPN server drops for whatever reason, then the tunnel routes will dissapear. In that case, packets will end up in the blackhole and can not secretly exit through our local network. This is <em>killswitch</em> to make sure no torrent traffic leaves the Raspberry Pi unsecured.</p>
+<p>Finally we have to make the file executable by everyone.</p>
+<div class="highlight"><pre><span></span>sudo chown root route-up.sh
+sudo chmod +x route-up.sh
+</pre></div>
+
+
+<p>Now we can test whether everything works fine. First start OpenVPN.</p>
+<div class="highlight"><pre><span></span>sudo openvpn --daemon --config /etc/openvpn/&lt;file&gt;.conf
+</pre></div>
+
+
+<p>And test that it works.</p>
+<div class="highlight"><pre><span></span>curl https://jsonip.com
+sudo -u deluge curl https://jsonip.com
+</pre></div>
+
+
+<p>Both commands should return a different IP, as one is run by you as an user, and the other is run by the <code>deluge</code> user. If you pass this test, then we can start deluge</p>
+<div class="highlight"><pre><span></span>sudo -u deluge deluged
+</pre></div>
+
+
+<p>If everything is allright, you should be able to connect to deluge using your client over the local network, but the actual torrent traffic is tunneled over the VPN.  If your OpenVPN came with a <code>/etc/openvpn/update-resolv-conf</code> file (Google it if not!) you can also hide your default DNS using:</p>
+<div class="highlight"><pre><span></span>sudo sed -i &#39;s|client|client\nscript-security 2\nup \/etc\/openvpn\/update-resolv-conf\ndown \/etc\/openvpn\/update-resolv-conf|&#39; *.conf
+</pre></div>
+
+
+<p>That's all for now! I hope this helped for you, if it did, please leave a message!</p>
+<p><em>Additional remark: Make sure that the deluge user has write access to the directory that you want you torrents to be saved. Otherwise this will result in an error immediately after starting a torrent</em></p>
+<p><strong>Update:</strong>
+The ability to mark and forward network packages using iptables is not enabled by default on newer Ubuntu installations, as is pointed out by <a href="http://themediaserver.com/bypass-vpn-connections-specifics-ports-ubuntu-kodibuntu/">this blogpost</a>. Following the above steps will thus work in a torrent client without a connection (due to the killswitch functionality). To enable, one has to change some kernel options. Please run the following code to switch the relevant options on:</p>
+<div class="highlight"><pre><span></span>sudo sysctl -w net.ipv4.conf.eth0.rp_filter=0
+sudo sysctl -w net.ipv4.conf.tun0.rp_filter=0
+sudo sysctl -w net.ipv4.conf.all.rp_filter=0
+sudo sysctl -w net.ipv4.conf.default.rp_filter=0
+sudo sysctl -w net.ipv4.conf.lo.rp_filter=0
+
+sudo sysctl -w net.ipv4.conf.all.forwarding=1
+sudo sysctl -w net.ipv4.conf.default.forwarding=1
+sudo sysctl -w net.ipv4.conf.eth0.forwarding=1
+sudo sysctl -w net.ipv4.conf.lo.forwarding=1
+sudo sysctl -w net.ipv4.conf.tun0.forwarding=1
+
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+sudo sysctl -w net.ipv6.conf.default.forwarding=1
+sudo sysctl -w net.ipv6.conf.eth0.forwarding=1
+sudo sysctl -w net.ipv6.conf.lo.forwarding=1
+sudo sysctl -w net.ipv6.conf.tun0.forwarding=1
+
+sudo sysctl -w net.ipv4.tcp_fwmark_accept=1
+</pre></div>
+
+
+<p>Now reboot the system and start the openVPN connection and test if the IP changes if an URL is fetched by the <em>deluge</em> user:</p>
+<div class="highlight"><pre><span></span>curl https://jsonip.com
+sudo -u deluge curl https://jsonip.com
+</pre></div>
+            </div>
+            <!-- /.entry-content -->
+    <hr/>
+    <section class="comments" id="comments">
+        <h2>Comments</h2>
+
+        <div id="disqus_thread"></div>
+        <script type="text/javascript">
+            /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+            var disqus_shortname = 'iilaurens'; // required: replace example with your forum shortname
+
+                    var disqus_identifier = 'Secure-torrenting';
+                var disqus_url = 'https://blog.laurens.xyz/post/Secure-torrenting.html';
+
+            var disqus_config = function () {
+                this.language = "en";
+            };
+
+            /* * * DON'T EDIT BELOW THIS LINE * * */
+            (function () {
+                var dsq = document.createElement('script');
+                dsq.type = 'text/javascript';
+                dsq.async = true;
+                dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+                (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+            })();
+        </script>
+        <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by
+            Disqus.</a></noscript>
+        <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+
+    </section>
+        </article>
+    </section>
+
+        </div>
+    </div>
+</div>
+<footer>
+   <div class="container">
+      <hr>
+      <div class="row">
+         <div class="col-xs-10">&copy; 2017 Laurens
+            &middot; Powered by <a href="https://github.com/getpelican/pelican-themes/tree/master/pelican-bootstrap3" target="_blank">pelican-bootstrap3</a>,
+            <a href="http://docs.getpelican.com/" target="_blank">Pelican</a>,
+            <a href="http://getbootstrap.com" target="_blank">Bootstrap</a>         </div>
+         <div class="col-xs-2"><p class="pull-right"><i class="fa fa-arrow-up"></i> <a href="#">Back to top</a></p></div>
+      </div>
+   </div>
+</footer>
+<script src="https://blog.laurens.xyz/theme/js/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="https://blog.laurens.xyz/theme/js/bootstrap.min.js"></script>
+
+<!-- Enable responsive features in IE8 with Respond.js (https://github.com/scottjehl/Respond) -->
+<script src="https://blog.laurens.xyz/theme/js/respond.min.js"></script>
+
+    <!-- Disqus -->
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = 'iilaurens'; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function () {
+            var s = document.createElement('script');
+            s.async = true;
+            s.type = 'text/javascript';
+            s.src = '//' + disqus_shortname + '.disqus.com/count.js';
+            (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+        }());
+    </script>
+    <!-- End Disqus Code -->
+    <!-- Google Analytics -->
+    <script type="text/javascript">
+
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-77190701-1']);
+        _gaq.push(['_trackPageview']);
+
+        (function () {
+            var ga = document.createElement('script');
+            ga.type = 'text/javascript';
+            ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(ga, s);
+        })();
+    </script>
+    <!-- End Google Analytics Code -->
+
+</body>
+</html>
